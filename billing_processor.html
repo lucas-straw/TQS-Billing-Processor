@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TQS Month-End Billing Processor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+  :root {
+    --bg:#f4f2ed;--surf:#fff;--s2:#edeae3;--bd:#d8d4cb;
+    --red:#c84b2f;--blue:#2f6cc8;--green:#2a8c5a;--amber:#b87a00;
+    --text:#1a1714;--t2:#6b6560;--t3:#a09890;
+    --shadow:0 1px 3px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;padding-bottom:80px}
+  .hdr{background:var(--text);color:#fff;padding:14px 32px}
+  .hdr-t{font-size:17px;font-weight:600}
+  .hdr-s{font-family:'DM Mono',monospace;font-size:11px;color:#777;margin-top:2px}
+  .steps{background:rgba(255,255,255,.06);padding:10px 32px;display:flex;gap:0;overflow-x:auto}
+  .stp{display:flex;align-items:center;gap:7px;color:#666;font-size:12px;white-space:nowrap;padding:0 16px 0 0;position:relative}
+  .stp::after{content:'›';position:absolute;right:4px;color:#444}
+  .stp:last-child::after{display:none}
+  .stp.active{color:#fff}.stp.done{color:var(--green)}
+  .stp-n{width:19px;height:19px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10px;flex-shrink:0}
+  .stp.active .stp-n{background:var(--red);color:#fff}
+  .stp.done .stp-n{background:var(--green);color:#fff}
+  .wrap{max-width:980px;margin:0 auto;padding:22px 20px 0}
+  .card{background:var(--surf);border:1px solid var(--bd);border-radius:10px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+  .ch{background:var(--s2);border-bottom:1px solid var(--bd);padding:12px 18px;display:flex;align-items:center;gap:10px}
+  .cn{background:var(--red);border-radius:50%;color:#fff;font-family:'DM Mono',monospace;font-size:11px;height:22px;width:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ct{font-weight:600;font-size:13px}.cd{font-size:12px;color:var(--t2);margin-left:auto}
+  .cb{padding:16px}
+  .dg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .ds{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px}
+  .dst{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;color:var(--t2);margin-bottom:8px}
+  .f{margin-bottom:9px}.f:last-child{margin-bottom:0}
+  label{display:block;font-size:12px;font-weight:500;color:var(--t2);margin-bottom:3px}
+  input[type=date],input[type=number]{background:var(--surf);border:1px solid var(--bd);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:6px 10px;width:100%;outline:none;transition:border-color .15s}
+  input:focus{border-color:var(--blue)}
+  .hint{font-size:11px;color:var(--t3);margin-top:2px;font-style:italic}
+  .ug{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .us{border:2px dashed var(--bd);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;background:var(--s2);position:relative;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .us:hover,.us.dov{border-color:var(--blue);background:rgba(47,108,200,.04)}
+  .us.ld{border-color:var(--green);border-style:solid;background:rgba(42,140,90,.05)}
+  .us input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .sl{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red);margin-bottom:2px}
+  .si{font-size:18px;margin-bottom:3px}
+  .sok{font-size:11px;color:var(--green);font-weight:500}.sno{font-size:11px;color:var(--t2)}
+  .pb-w{background:var(--bd);border-radius:4px;height:4px;margin-top:8px;overflow:hidden}
+  .pb-f{background:var(--blue);height:100%;border-radius:4px;transition:width .3s}
+  .btn{background:var(--red);border:none;border-radius:7px;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;padding:10px 22px;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn-s{background:var(--s2);border:1px solid var(--bd);color:var(--text);font-size:13px;padding:8px 16px}
+  .btn-g{background:var(--green);color:#fff}
+  .btn-b{background:var(--blue);color:#fff;font-size:13px;padding:8px 16px}
+  .btn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .rev{margin-bottom:12px}
+  .rev-hdr{display:flex;align-items:center;gap:10px;padding:11px 15px;border-radius:8px 8px 0 0;font-weight:600;font-size:13px;border:1px solid;cursor:pointer}
+  .rev-body{border:1px solid;border-top:none;border-radius:0 0 8px 8px;overflow:hidden}
+  .rev.routine .rev-hdr{background:#f0f7f4;border-color:rgba(42,140,90,.25);color:var(--green)}
+  .rev.routine .rev-body{border-color:rgba(42,140,90,.2)}
+  .rev.needs .rev-hdr{background:#fff8ee;border-color:rgba(184,122,0,.3);color:var(--amber)}
+  .rev.needs .rev-body{border-color:rgba(184,122,0,.2)}
+  .rev.danger .rev-hdr{background:#fff5f3;border-color:rgba(200,75,47,.25);color:var(--red)}
+  .rev.danger .rev-body{border-color:rgba(200,75,47,.2)}
+  .rev.hold .rev-hdr{background:#fff5f3;border-color:rgba(200,75,47,.2);color:var(--red)}
+  .rev.hold .rev-body{border-color:rgba(200,75,47,.15)}
+  .tog{margin-left:auto;background:none;border:1px solid currentColor;border-radius:4px;color:inherit;cursor:pointer;font-size:11px;padding:2px 7px;opacity:.7}
+  .tog:hover{opacity:1}
+  .cnt{font-family:'DM Mono',monospace;font-size:11px;opacity:.8;margin-left:4px}
+  .collapsed{display:none}
+  .chrow{display:grid;grid-template-columns:130px 1fr 1fr auto;align-items:stretch;border-bottom:1px solid var(--bd);font-size:12px}
+  .chrow:last-child{border-bottom:none}
+  .chrow.hrow{background:var(--s2);font-family:'DM Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.5px;color:var(--t2);text-transform:uppercase}
+  .cc{padding:8px 11px;border-right:1px solid var(--bd);display:flex;align-items:center}
+  .cc:last-child{border-right:none}
+  .cbf{font-family:'DM Mono',monospace;font-size:11px;color:var(--t2);text-decoration:line-through}
+  .caf{font-family:'DM Mono',monospace;font-size:11px;color:var(--green);font-weight:600}
+  .apc{display:flex;gap:5px;align-items:center;padding:5px 10px}
+  .ap{border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;padding:3px 9px;transition:all .15s}
+  .ap.ok{background:rgba(42,140,90,.12);color:var(--green)}.ap.ok:hover,.ap.ok.act{background:var(--green);color:#fff}
+  .ap.no{background:rgba(200,75,47,.1);color:var(--red)}.ap.no:hover,.ap.no.act{background:var(--red);color:#fff}
+  .ap.fix{background:rgba(200,75,47,.1);color:var(--red)}.ap.fix:hover,.ap.fix.act{background:var(--red);color:#fff}
+  .ap.skip{background:var(--s2);border:1px solid var(--bd);color:var(--t2)}.ap.skip:hover,.ap.skip.act{background:var(--bd)}
+  .ap.act{cursor:default}
+  .abadge{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;padding:1px 6px;border-radius:3px;margin-left:4px}
+  .ab-e{background:rgba(200,75,47,.12);color:var(--red)}
+  .ab-f{background:rgba(184,122,0,.12);color:var(--amber)}
+  .ab-ok{background:rgba(42,140,90,.12);color:var(--green)}
+  .sbar{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px}
+  .sc{background:var(--surf);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;text-align:center}
+  .sv{font-family:'DM Mono',monospace;font-size:18px;font-weight:600}
+  .sl2{font-size:11px;color:var(--t2);margin-top:2px}
+  .sc.ec .sv{color:var(--red)}.sc.fc .sv{color:var(--amber)}.sc.gc .sv{color:var(--green)}.sc.bc .sv{color:var(--blue)}
+  .dl-grp{background:var(--s2);border:1px solid var(--bd);border-radius:8px;margin-bottom:8px;overflow:hidden}
+  .dl-gh{padding:9px 13px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--bd);background:var(--surf)}
+  .dl-lbl{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--red);background:var(--s2);padding:2px 7px;border-radius:3px}
+  .csv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:7px;padding:9px}
+  .csv-i{background:var(--surf);border:1px solid var(--bd);border-radius:6px;padding:7px 11px;display:flex;align-items:center;gap:7px;cursor:pointer;transition:all .15s;font-size:11px}
+  .csv-i:hover{border-color:var(--green);background:rgba(42,140,90,.04)}
+  .csv-i.upl{border-color:var(--blue);cursor:not-allowed}
+  .csv-i.done{border-color:var(--green);background:rgba(42,140,90,.06)}
+  .csv-i.err{border-color:var(--red)}
+  .csv-ent{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--blue);background:rgba(47,108,200,.1);padding:1px 5px;border-radius:3px;flex-shrink:0}
+  .csv-fn{flex:1;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sp-cfg{background:#f0f4ff;border:1px solid rgba(47,108,200,.2);border-radius:8px;padding:11px 14px;margin-bottom:11px}
+  .sp-cfg-t{font-size:12px;font-weight:600;color:var(--blue);margin-bottom:5px}
+  .sp-path{font-family:'DM Mono',monospace;font-size:11px;color:var(--t2);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .sp-seg{background:rgba(47,108,200,.1);padding:2px 6px;border-radius:3px;color:var(--blue)}
+  .sp-ed{background:var(--surf);border:1px solid rgba(47,108,200,.3);border-radius:4px;padding:2px 6px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;outline:none}
+  .up-bar{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:9px 13px;margin-bottom:9px;display:flex;align-items:center;gap:10px}
+  .up-prog{flex:1;background:var(--bd);border-radius:4px;height:5px;overflow:hidden}
+  .up-pf{background:var(--green);height:100%;border-radius:4px;transition:width .3s}
+  .up-stat{font-size:11px;color:var(--t2);white-space:nowrap}
+  .audit-report{border:1px solid var(--bd);border-radius:8px;overflow:hidden;margin-top:14px}
+  .ar-hdr{background:var(--s2);border-bottom:1px solid var(--bd);padding:12px 16px;font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+  .ar-section{border-bottom:1px solid var(--bd)}
+  .ar-section:last-child{border-bottom:none}
+  .ar-sec-hdr{padding:9px 14px;background:var(--s2);font-size:11px;font-weight:600;color:var(--t2);display:flex;align-items:center;gap:6px;cursor:pointer}
+  .ar-row{display:grid;grid-template-columns:110px 100px 1fr 90px;border-bottom:1px solid var(--bd);font-size:11px}
+  .ar-row:last-child{border-bottom:none}
+  .ar-row.hrow{background:var(--s2);font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--t2);letter-spacing:.5px;text-transform:uppercase}
+  .arc{padding:7px 10px;border-right:1px solid var(--bd)}.arc:last-child{border-right:none}
+  .verdict{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px}
+  .v-err{background:rgba(200,75,47,.1);color:var(--red)}
+  .v-flag{background:rgba(184,122,0,.1);color:var(--amber)}
+  .v-ok{background:rgba(42,140,90,.1);color:var(--green)}
+  .applied-log{background:var(--text);border-radius:8px;padding:12px 14px;margin-top:12px;font-family:'DM Mono',monospace;font-size:11px;line-height:1.7;max-height:180px;overflow-y:auto;color:#ccc}
+  .al-ok{color:#6ee7a0}.al-warn{color:#f9d56e}.al-info{color:#7ec8f9}.al-err{color:#f97a7a}
+  .fsum{margin-bottom:12px;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+  .fr{display:flex;align-items:center;gap:8px;padding:8px 13px;border-bottom:1px solid var(--bd);background:var(--surf);font-size:12px}
+  .fr:last-child{border-bottom:none}
+  .fk{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--red);background:var(--s2);padding:2px 6px;border-radius:3px}
+  .fok{margin-left:auto;font-size:11px;color:var(--green);font-family:'DM Mono',monospace}
+  .fsk{margin-left:auto;font-size:11px;color:var(--t3)}
+  .emap{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:9px;font-size:11px}
+  .em-i{background:var(--s2);border:1px solid var(--bd);border-radius:4px;padding:5px 8px}
+  .em-c{font-family:'DM Mono',monospace;font-weight:700;color:var(--blue)}
+  .em-n{color:var(--t2);font-size:10px}
+  .hidden{display:none!important}
+  .db-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;font-size:11px;margin-top:8px;font-family:'DM Mono',monospace}
+  .db-bar.loading{background:rgba(47,108,200,.07);border:1px solid rgba(47,108,200,.2);color:var(--blue)}
+  .db-bar.ok{background:rgba(42,140,90,.07);border:1px solid rgba(42,140,90,.2);color:var(--green)}
+  .db-bar.warn{background:rgba(184,122,0,.07);border:1px solid rgba(184,122,0,.2);color:var(--amber)}
+  .db-bar.err{background:rgba(200,75,47,.07);border:1px solid rgba(200,75,47,.2);color:var(--red)}
+  .db-spin{width:11px;height:11px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-t">TQS Month-End Billing Processor</div>
+  <div class="hdr-s">Dates · Rules · Audit · Export · SharePoint</div>
+</div>
+<div class="steps" id="steps">
+  <div class="stp active" id="st1"><div class="stp-n">1</div>Dates &amp; Period</div>
+  <div class="stp" id="st2"><div class="stp-n">2</div>Upload Files</div>
+  <div class="stp" id="st3"><div class="stp-n">3</div>Review Decisions</div>
+  <div class="stp" id="st4"><div class="stp-n">4</div>Generate &amp; Download</div>
+  <div class="stp" id="st5"><div class="stp-n">5</div>Audit Report</div>
+</div>
+<div id="rulesBanner" style="background:#1a1714;border-bottom:1px solid #333;padding:10px 32px;display:flex;align-items:center;gap:12px;font-size:12px;color:#999">
+  <span style="font-size:14px">📋</span>
+  <span id="rulesStatus">Checking billing rules against Confluence...</span>
+  <button onclick="checkConfluenceRules()" style="margin-left:auto;background:none;border:1px solid #444;color:#999;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:11px;font-family:'DM Mono',monospace">↻ Re-check</button>
+</div>
+<div class="wrap">
+<div class="card">
+  <div class="ch"><div class="cn">1</div><div class="ct">Establish Billing Dates &amp; Period</div><div class="cd">Set once — applies to all files</div></div>
+  <div class="cb">
+    <div class="dg" style="margin-bottom:10px">
+      <div class="ds">
+        <div class="dst">Items A, B, C — By Week / Totaled / Pre-Bill</div>
+        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iABC" onchange="checkReadiness()"/></div>
+        <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gABC" onchange="checkReadiness()"/><div class="hint">Month close date</div></div>
+      </div>
+      <div class="ds">
+        <div class="dst">Item D — Flat Rate</div>
+        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iD" onchange="checkReadiness()"/><div class="hint">Previous month's Friday</div></div>
+        <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gD" onchange="checkReadiness()"/></div>
+      </div>
+    </div>
+    <div class="dg">
+      <div class="ds">
+        <div class="dst">Billing Period</div>
+        <div class="f"><label>Period Start</label><input type="date" id="pStart" onchange="checkReadiness()" value="2026-02-23" onchange="onPeriodChange()"/></div>
+        <div class="f"><label>Period End</label><input type="date" id="pEnd" onchange="checkReadiness()" value="2026-03-29" onchange="onPeriodChange()"/></div>
+        <div class="f"><label>Total Weekdays in Period</label><input type="number" id="totalWD" value="27" min="1" max="31"/><div class="hint">Mon–Fri count</div></div>
+      </div>
+      <div class="ds">
+        <div class="dst">Database &amp; Audit Settings</div>
+        <div class="f"><label>Amount Tolerance (%)</label><input type="number" id="tol" value="1" min="0" max="5" step="0.1"/></div>
+        <div class="f">
+          <div id="dbStatusBar" class="db-bar loading"><span id="dbStatusText">⏳ Will connect to Qnet DB when you click Analyze Files</span></div>
+          <div class="hint" style="margin-top:4px">Queried automatically when you click Analyze Files</div>
+        </div>
+      </div>
+    </div>
+    <div class="emap">
+      <div class="em-i"><div class="em-c">E100</div><div class="em-n">US</div></div>
+      <div class="em-i"><div class="em-c">E200</div><div class="em-n">MX</div></div>
+      <div class="em-i"><div class="em-c">E300</div><div class="em-n">CA Branch</div></div>
+      <div class="em-i"><div class="em-c">E600</div><div class="em-n">CA ULC</div></div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="ch"><div class="cn">2</div><div class="ct">Upload Raw Qnet Exports</div><div class="cd">Upload any or all 4 files</div></div>
+  <div class="cb">
+    <div class="ug">
+      <div class="us" id="sl-A" ondragover="dv(event,'A')" ondragleave="dl('A')" ondrop="dd(event,'A')"><input type="file" accept=".xlsx,.xls" onchange="lf(event.target.files[0],'A')"/><div class="si">📋</div><div class="sl">ITEM A</div><div id="sn-A" class="sno">Monthly By Week</div></div>
+      <div class="us" id="sl-B" ondragover="dv(event,'B')" ondragleave="dl('B')" ondrop="dd(event,'B')"><input type="file" accept=".xlsx,.xls" onchange="lf(event.target.files[0],'B')"/><div class="si">📋</div><div class="sl">ITEM B</div><div id="sn-B" class="sno">Monthly Totaled</div></div>
+      <div class="us" id="sl-C" ondragover="dv(event,'C')" ondragleave="dl('C')" ondrop="dd(event,'C')"><input type="file" accept=".xlsx,.xls" onchange="lf(event.target.files[0],'C')"/><div class="si">📋</div><div class="sl">ITEM C</div><div id="sn-C" class="sno">Pre-Billing AH/WP</div></div>
+      <div class="us" id="sl-D" ondragover="dv(event,'D')" ondragleave="dl('D')" ondrop="dd(event,'D')"><input type="file" accept=".xlsx,.xls" onchange="lf(event.target.files[0],'D')"/><div class="si">📋</div><div class="sl">ITEM D</div><div id="sn-D" class="sno">Flat Rate</div></div>
+    </div>
+    <div class="pb-w"><div class="pb-f" id="pbf" style="width:0%"></div></div>
+    <div id="s2act" class="hidden" style="margin-top:12px">
+      <div class="fsum" id="fsum"></div>
+      <div class="btn-row">
+        <button class="btn" id="analyzeBtn" onclick="analyze()" disabled>🔍 Analyze Files</button>
+        <button class="btn btn-s" onclick="resetAll()">↺ Reset</button>
+        <span id="analyzeNote" style="font-size:11px;color:var(--amber);font-family:'DM Mono',monospace" style="font-size:11px;color:var(--t2)"></span>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="s3" class="hidden"></div>
+<div id="s4" class="card hidden">
+  <div class="ch"><div class="cn">4</div><div class="ct">Generate &amp; Download CSVs</div><div class="cd">One CSV per entity per report</div></div>
+  <div class="cb">
+    <div class="sp-cfg">
+      <div class="sp-cfg-t">📁 SharePoint Save Location</div>
+      <div class="sp-path">
+        <span class="sp-seg">Accounting/AR/Invoicing/Mthly Invoicing Docs</span> /
+        <input class="sp-ed" id="spYear" value="2026" style="width:46px"/> /
+        <input class="sp-ed" id="spMonth" placeholder="03 March" style="width:88px"/> /
+        <span class="sp-seg">Monthly Rep</span>
+      </div>
+    </div>
+    <div class="up-bar hidden" id="upBar"><div class="up-prog"><div class="up-pf" id="upPf" style="width:0%"></div></div><span class="up-stat" id="upStat">Uploading...</span></div>
+    <div id="dlContent"></div>
+    <div class="btn-row" style="margin-top:11px">
+      <button class="btn btn-b" onclick="uploadAll()">☁ Upload All to SharePoint</button>
+      <button class="btn btn-s" onclick="downloadAll()">⬇ Bulk Download All CSVs</button>
+      <span style="font-size:11px;color:var(--t3)" id="upOverall"></span>
+    </div>
+  </div>
+</div>
+<div id="s5" class="hidden"></div>
+</div>
+<script id="mainScript">
+// ── STATE ────────────────────────────────────────────────────────────────
+const WB={A:null,B:null,C:null,D:null}, FN={A:'',B:'',C:'',D:''};
+const NM={A:'Monthly By Week',B:'Monthly Totaled',C:'Pre-Billing AH/WP',D:'Flat Rate'};
+let CHANGES=[], AUDIT=[], CSV_DATA={}, LOG=[];
+let cid=0; const mkId=()=>++cid;
+const CODE_FIXES={};
+
+// ── DB STATE ─────────────────────────────────────────────────────────────
+let DB={
+  connected:false, loading:false,
+  shutdownRows:[],       // raw rows: {id,locationCode,startTime,endTime,reason,psaId,psaAgreement,psaAgreementNumber}
+  agreementMap:{},       // agreementNumber→{locationCode,priceType,flatRateFrequency,rate,startTime,endTime,contractEntity}
+  marelliFlatZeroSAs:new Set(),
+  loadedForPeriod:null
+};
+
+// ── DB LOAD ──────────────────────────────────────────────────────────────
+function onPeriodChange(){
+  checkReadiness();
+  const pStart=document.getElementById('pStart').value;
+  const pEnd=document.getElementById('pEnd').value;
+  if(pStart&&pEnd){
+    // Reset DB so it reloads for the new period
+    DB.connected=false; DB.loadedForPeriod='';
+    loadDBData(pStart,pEnd);
+  }
+}
+
+async function loadDBData(pStart, pEnd){
+  if(DB.loading)return;
+  DB.loading=true;
+  setDBStatus('loading','Querying Qnet database...');
+  const url = CONFIG.n8n.dbWebhook
+    + '?pStart=' + encodeURIComponent(pStart) + '&pEnd=' + encodeURIComponent(pEnd);
+  try{
+    const controller=new AbortController();
+    const tid=setTimeout(()=>controller.abort(),20000);
+    let resp;
+    try{ resp=await fetch(url,{method:'GET',signal:controller.signal}); }
+    finally{ clearTimeout(tid); }
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const result=await resp.json();
+
+    DB.shutdownRows=result.shutdowns||[];
+    DB.marelliFlatZeroSAs=new Set(result.marelliSuppressedSageCodes||[]);
+    // pricedAgreements covers both Flat Rate and Monthly Pricing
+    // Store as arrays per sageLocationCode — one location can have multiple agreements
+    DB.flatRateMap={};
+    (result.pricedAgreements||[]).forEach(a=>{
+      if(!a.sageLocationCode)return;
+      if(!DB.flatRateMap[a.sageLocationCode]) DB.flatRateMap[a.sageLocationCode]=[];
+      DB.flatRateMap[a.sageLocationCode].push(a);
+    });
+    // invoiceSettings: accountNumber → 'Normal' | 'Days The Plant Is Open'
+    DB.invoiceSettings=result.invoiceSettings||{};
+
+    DB.connected=true; DB.loading=false;
+    DB.loadedForPeriod=pStart+':'+pEnd;
+    const sdCnt=new Set(DB.shutdownRows.map(r=>r.id)).size;
+    const frCnt=Object.keys(DB.flatRateMap).length;
+    const mCnt=DB.marelliFlatZeroSAs.size;
+    setDBStatus('ok','✅ DB connected — '+sdCnt+' shutdown'+(sdCnt!==1?'s':'')+' · '+frCnt+' flat-rate locations · '+mCnt+' Marelli codes');
+    checkReadiness();
+  }catch(err){
+    DB.loading=false; DB.connected=false;
+    const msg=err.name==='AbortError'?'Timed out — open this file in Chrome, not in claude.ai':err.message;
+    setDBStatus('warn','⚠ DB unavailable ('+msg+')');
+    checkReadiness();
+  }
+}
+
+function setDBStatus(type,text){
+  const bar=document.getElementById('dbStatusBar');
+  bar.className='db-bar '+type;
+  bar.innerHTML=(type==='loading'?'<div class="db-spin"></div>':'')+`<span>${text}</span>`;
+}
+
+// ── SHUTDOWN HELPERS ──────────────────────────────────────────────────────
+function stripSAPrefix(sa){return String(sa||'').replace(/^[A-Za-z]/,'');}
+
+// Returns unique shutdown records applicable to this SA/locationCode in the given date range
+function getApplicableShutdowns(sageLocCode,rangeStart,rangeEnd,psaAgreementNumber){
+  // sageLocCode: e.g. "L10299" — matches SODOCUMENTENTRY_CLASSID in billing export
+  // psaAgreementNumber: optional — if provided, filter agreement-specific shutdowns to only this agreement
+  const rs=new Date(rangeStart),re=new Date(rangeEnd);
+  const byId={};
+  DB.shutdownRows.forEach(sd=>{
+    if(sd.sageLocationCode!==sageLocCode)return;
+    const ss=new Date(sd.startTime),se=new Date(sd.endTime);
+    if(ss>re||se<rs)return;
+    if(!byId[sd.id])byId[sd.id]={...sd,psaAgreementNumbers:new Set(),hasPSA:false};
+    if(sd.psaId){byId[sd.id].hasPSA=true;if(sd.psaAgreementNumber)byId[sd.id].psaAgreementNumbers.add(sd.psaAgreementNumber);}
+  });
+  return Object.values(byId).filter(sd=>{
+    if(!sd.hasPSA)return true; // full-location shutdown — applies to all SAs here
+    // Agreement-specific: only applies if no filter, or if the agreement matches
+    if(!psaAgreementNumber)return false; // agreement-specific but we don't know which — skip
+    return sd.psaAgreementNumbers.has(psaAgreementNumber);
+  }).map(sd=>({...sd,scope:sd.hasPSA?'agreement-specific':'full-location'}));
+}
+
+// Count full Mon–Fri weeks covered by a set of shutdowns within pStart–pEnd
+function countFullShutdownWeeks(shutdowns,pStart,pEnd){
+  const ps=new Date(pStart),pe=new Date(pEnd);
+  const fullWeekSet=new Set();
+  shutdowns.forEach(sd=>{
+    const ss=new Date(sd.startTime),se=new Date(sd.endTime);
+    let mon=new Date(Math.max(ss,ps));
+    while(mon.getDay()!==1)mon.setDate(mon.getDate()-1);
+    while(mon<=pe){
+      const fri=new Date(mon);fri.setDate(fri.getDate()+4);
+      if(ss<=mon&&se>=fri&&mon>=ps&&fri<=pe)fullWeekSet.add(mon.toISOString().slice(0,10));
+      mon.setDate(mon.getDate()+7);
+    }
+  });
+  return fullWeekSet.size;
+}
+
+function calcFlatRateCredit(rate,freq,weeks){
+  const pct={'Daily':1,'Weekly':1,'Monthly':0.20,'Quarterly':1/13,'Annual':1/52}[freq]||0.20;
+  return r2(rate*pct*weeks);
+}
+
+// ── DRAG/DROP & FILE LOAD ─────────────────────────────────────────────────
+function dv(e,k){e.preventDefault();document.getElementById('sl-'+k).classList.add('dov')}
+function dl(k){document.getElementById('sl-'+k).classList.remove('dov')}
+function dd(e,k){e.preventDefault();dl(k);const f=e.dataTransfer.files[0];if(f)lf(f,k)}
+function lf(file,key){
+  if(!file)return;
+  FN[key]=file.name.replace(/\.xlsx?$/i,'');
+  const r=new FileReader();
+  r.onload=e=>{
+    WB[key]=XLSX.read(e.target.result,{type:'array',cellDates:false,raw:true});
+    document.getElementById('sl-'+key).classList.add('ld');
+    document.getElementById('sn-'+key).className='sok';
+    document.getElementById('sn-'+key).textContent='✓ '+file.name;
+    const n=Object.values(WB).filter(w=>w).length;
+    document.getElementById('pbf').style.width=(n*25)+'%';
+    document.getElementById('s2act').classList.remove('hidden');
+    document.getElementById('fsum').innerHTML=['A','B','C','D'].map(k=>`
+      <div class="fr"><span class="fk">ITEM ${k}</span><span>${NM[k]}</span>
+      ${WB[k]?`<span class="fok">✓ ${FN[k]}</span>`:`<span class="fsk">not uploaded</span>`}</div>`).join('');
+    setStep(2); checkReadiness();
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function setStep(n){for(let i=1;i<=5;i++){const el=document.getElementById('st'+i);el.className='stp'+(i===n?' active':i<n?' done':'');}}
+
+// ── DATE HELPERS ──────────────────────────────────────────────────────────
+const fmt=(s)=>{if(!s)return null;const[y,m,d]=s.split('-');return`${m}/${d}/${y}`};
+const tod=()=>{const t=new Date();return`${String(t.getMonth()+1).padStart(2,'0')}/${String(t.getDate()).padStart(2,'0')}/${t.getFullYear()}`};
+const nm1=(s)=>{const b=new Date(s);b.setMonth(b.getMonth()+1);b.setDate(1);return`${String(b.getMonth()+1).padStart(2,'0')}/01/${b.getFullYear()}`};
+const lastDay=(s)=>{const b=new Date(s);const l=new Date(b.getFullYear(),b.getMonth()+1,0);return`${String(l.getMonth()+1).padStart(2,'0')}/${String(l.getDate()).padStart(2,'0')}/${l.getFullYear()}`};
+const bent=(s)=>{const b=new Date(s);b.setMonth(b.getMonth()+1);b.setDate(1);const gl=`${String(b.getMonth()+1).padStart(2,'0')}/01/${b.getFullYear()}`;b.setDate(2);return{inv:`${String(b.getMonth()+1).padStart(2,'0')}/02/${b.getFullYear()}`,gl}};
+const r2=(n)=>Math.round(n*100)/100;
+const tol=()=>parseFloat(document.getElementById('tol').value)||1;
+const totalWD=()=>parseInt(document.getElementById('totalWD').value)||27;
+function withinTol(b,c){if(c===0&&b===0)return true;if(c===0)return false;return Math.abs((b-c)/c)*100<=tol();}
+function countWeekdays(start,end){let d=new Date(start),count=0;const e=new Date(end);while(d<=e){const wd=d.getDay();if(wd!==0&&wd!==6)count++;d.setDate(d.getDate()+1);}return count;}
+
+const CUST_NAMES={'C10916':'Standard Profil Mexico','C10897':'Standard Profil Bulgaria','C10884':'Benteler',
+  'C10329':'Marelli North America','C10023':'Autoliv OTC','C10581':'US Farathane',
+  'C10960':'New Sabina Industries','C10412':'N.S. International','C10763':'LG Electronics',
+  'C10061':'Auria Solutions','C10694':'ZF Passive Safety'};
+
+// ── ANALYZE ───────────────────────────────────────────────────────────────
+function checkReadiness(){
+  const iABC=document.getElementById('iABC').value;
+  const gABC=document.getElementById('gABC').value;
+  const pStart=document.getElementById('pStart').value;
+  const pEnd=document.getElementById('pEnd').value;
+  const hasFile=Object.values(WB).some(w=>w);
+  const btn=document.getElementById('analyzeBtn');
+  const note=document.getElementById('analyzeNote');
+  if(!btn)return;
+
+  const missing=[];
+  if(!iABC) missing.push('Invoice Date (Items A/B/C)');
+  if(!gABC) missing.push('GL Date (Items A/B/C)');
+  if(!pStart||!pEnd) missing.push('Billing Period dates');
+  if(!hasFile) missing.push('at least one file');
+
+  if(missing.length===0){
+    btn.disabled=false;
+    if(note) note.textContent=DB.connected?'DB ready — shutdown & flat-rate checks automatic':'';
+  } else {
+    btn.disabled=true;
+    if(note) note.textContent='Still needed: '+missing.join(', ');
+  }
+}
+
+function analyze(){
+  const iABC=document.getElementById('iABC').value;
+  const gABC=document.getElementById('gABC').value;
+  const pStart=document.getElementById('pStart').value;
+  const pEnd=document.getElementById('pEnd').value;
+
+  // Disable button and show working state
+  const btn=document.getElementById('analyzeBtn');
+  const note=document.getElementById('analyzeNote');
+  if(btn) btn.disabled=true;
+  if(note) note.textContent='⏳ Working...';
+
+  CHANGES=[]; AUDIT=[]; LOG=[]; cid=0;
+
+  const runAnalysis=()=>{
+    if(note) note.textContent='';
+    if(btn) btn.disabled=false;
+    _doAnalyze(pStart,pEnd,iABC,gABC);
+  };
+
+  if(!DB.connected||DB.loadedForPeriod!==pStart+':'+pEnd){
+    // Show DB loading state in the DB status bar
+    setDBStatus('loading','Querying Qnet database...');
+    loadDBData(pStart,pEnd).then(runAnalysis).catch(runAnalysis);
+  } else {
+    runAnalysis();
+  }
+}
+
+function _doAnalyze(pStart,pEnd,iABC,gABC){
+
+  ['A','B','C','D'].forEach(key=>{
+    if(!WB[key])return;
+    const isD=key==='D';
+    const stdInv=fmt(isD?(document.getElementById('iD').value||iABC):iABC);
+    const stdGl=fmt(isD?(document.getElementById('gD').value||gABC):gABC);
+    const baseI=isD?(document.getElementById('iD').value||iABC):iABC;
+    const baseG=isD?(document.getElementById('gD').value||gABC):gABC;
+
+    WB[key].SheetNames.forEach(sName=>{
+      const ws=WB[key].Sheets[sName];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      if(rows.length<2)return;
+      const hdr=rows[0];
+      const ci=(n)=>hdr.indexOf(n);
+      const cC=ci('DATE'),cD=ci('GLPOSTINGDATE'),cF=ci('CUSTOMER_ID'),cK=ci('CURRENCY');
+      const cI=ci('ITEMID'),cQ=ci('QUANTITY'),cP=ci('PRICE');
+      const cClass=ci('SODOCUMENTENTRY_CLASSID'),cDesc=ci('ITEMDESC'),cLine=ci('LINE');
+      if(cC===-1||cD===-1)return;
+
+      let cust='';
+      const sheetDates={count:0,origI:'',origG:'',newI:stdInv,newG:stdGl};
+      const custGroups={};
+
+      rows.forEach((row,i)=>{
+        if(i===0)return;
+        if(row[cF]&&row[cF]!=='')cust=String(row[cF]).trim();
+        const cur=cK!==-1?String(row[cK]||'').trim().toUpperCase():'';
+        const hasDate=row[cC]&&row[cC]!=='';
+        const itemId=cI!==-1?String(row[cI]||'').trim():'';
+        const sa=cClass!==-1?String(row[cClass]||'').trim():'';
+        const desc=cDesc!==-1?String(row[cDesc]||''):'';
+        const qty=parseFloat(row[cQ])||0;
+        const price=parseFloat(row[cP])||0;
+
+        if(!custGroups[cust])custGroups[cust]={units:0,discRows:[],hstRows:[],vatRows:[],flatRows:[],shutdownRows:[],mpRows:[],wpRows:[],rows1001:[]};
+        const g=custGroups[cust];
+        if(itemId==='1001'){g.units+=qty;g.rows1001.push({i,row,sa,desc,qty,price});}
+        if(itemId==='1003')g.wpRows.push({i,row,sa,desc,qty,price});
+        if(itemId==='1096')g.discRows.push({i,row,sa,desc,qty,price});
+        if(itemId==='1053')g.hstRows.push({i,row,sa,desc,qty,price});
+        if(itemId==='1047')g.vatRows.push({i,row,sa,desc,qty,price});
+        if(itemId==='1005'&&!desc.includes('Shutdown'))g.flatRows.push({i,row,sa,desc,qty,price});
+        if(desc.includes('Shutdown Credit'))g.shutdownRows.push({i,row,sa,desc,qty,price});
+        if(desc.includes('Monthly Pricing'))g.mpRows.push({i,row,sa,desc,qty,price});
+
+        // ── DATE CHANGES ──
+        if(hasDate){
+          let tI=stdInv,tG=stdGl,rule='',ct='std';
+          if(cust==='C10916'){tI=nm1(baseI);rule='Invoice date = 1st of next month';ct='special';}
+          else if(cust==='C10897'){tI=lastDay(baseG);rule='Invoice date = last day of month';ct='special';}
+          else if(cust==='C10884'&&key==='D'){const bd=bent(baseI);tI=bd.inv;tG=bd.gl;rule='Benteler: inv=2nd, GL=1st next month';ct='special';}
+          else if(cur==='EUR'){tI=tod();rule='EUR: invoice date = today (exchange rate)';ct='special';}
+          if(ct==='std'){if(!sheetDates.origI){sheetDates.origI=String(row[cC]);sheetDates.origG=String(row[cD]||'');}sheetDates.count++;}
+          else CHANGES.push({id:mkId(),type:'date-special',fileKey:key,sheet:sName,custId:cust,before:`Inv:${String(row[cC])} / GL:${String(row[cD]||'')}`,after:`Inv:${tI} / GL:${tG}`,reason:rule,approved:null,rowIdx:i});
+        }
+
+        // ── STRUCTURAL RULES ──
+        if(key==='A'&&sName==='E100'&&row[cF]){
+          const cid2=String(row[cF]).trim().toUpperCase();
+          if(cid2==='WCBUT'||cid2==='TEST1')
+            CHANGES.push({id:mkId(),type:'block',fileKey:key,sheet:sName,custId:cid2,before:'(empty)',after:'#',reason:'Test account — block Sage import',approved:null,rowIdx:i});
+        }
+        if(cust==='C10763'&&itemId==='1002')
+          CHANGES.push({id:mkId(),type:'split',fileKey:key,sheet:sName,custId:'C10763',before:'1002 row on main invoice',after:'Moved to new "Rework" invoice',reason:'LG Electronics: additional hours separate invoice',approved:null,rowIdx:i});
+
+        // ── MARELLI AUTO-SUPPRESS (DB-driven) ──
+        if(cust==='C10329'&&sa&&itemId&&DB.connected){
+                    if(DB.marelliFlatZeroSAs.has(sa)){
+            if(!CHANGES.find(c=>c.type==='marelli-suppress'&&c.rowIdx===i&&c.sheet===sName&&c.fileKey===key))
+              CHANGES.push({id:mkId(),type:'marelli-suppress',fileKey:key,sheet:sName,custId:'C10329',sa,
+                before:'(no #)',after:'# (suppressed)',reason:`DB: SA ${sa} is Flat Rate $0 — suppress to avoid duplicate invoice`,approved:true,rowIdx:i});
+          }
+        }
+      });
+
+      if(sheetDates.count>0)
+        CHANGES.push({id:mkId(),type:'date-std',fileKey:key,sheet:sName,custId:'ALL',before:sheetDates.origI+' / '+sheetDates.origG,after:sheetDates.newI+' / '+sheetDates.newG,count:sheetDates.count,approved:true});
+
+      // ── AUDIT CHECKS ─────────────────────────────────────────────────
+      Object.entries(custGroups).forEach(([cId,g])=>{
+
+        // Volume discounts
+        g.discRows.forEach(dr=>{
+          const billedDisc=parseFloat(dr.row[cP])||0;
+          const pctMatch=dr.desc.match(/Applied\s+([\d.]+)%/i);
+          const statedPct=pctMatch?parseFloat(pctMatch[1])/100:null;
+          if(statedPct===null)return;
+          let baseAmt=0;
+          for(let j=dr.i-1;j>=1;j--){
+            const r=rows[j];const rItem=String(r[cI]||'').trim();const rSA=String(r[cClass]||'').trim();
+            if(rSA!==dr.sa)break;if(['1053','1047'].includes(rItem))break;
+            if(['1001','1002','1003'].includes(rItem)){baseAmt=(parseFloat(r[cQ])||0)*(parseFloat(r[cP])||0);break;}
+          }
+          if(baseAmt===0)return;
+          const expDisc=r2(-baseAmt*statedPct);
+          const sev=!withinTol(billedDisc,expDisc)?'error':'ok';
+          AUDIT.push({id:mkId(),type:'vol-disc',sev,fileKey:key,sheet:sName,custId:cId,sa:dr.sa,
+            desc:`Volume discount (${Math.round(statedPct*100)}%)`,calc:`$${r2(baseAmt)} × ${Math.round(statedPct*100)}% = $${Math.abs(expDisc)}`,
+            billed:billedDisc,calcAmt:expDisc,rowIdx:dr.i,decision:sev==='ok'?'accept':null,
+            note:sev==='error'?`Billed ${billedDisc}, expected ${expDisc}`:'',
+            fix:sev!=='ok'?`Change PRICE from ${billedDisc} to ${expDisc}`:'',fixRow:[...dr.row],hdr});
+        });
+
+        // HST + VAT
+        const TAX_IDS=new Set(['1053','1047']);
+        function getTaxPeers(taxRowIdx){
+          const taxRow=rows[taxRowIdx];const sa=String(taxRow[cClass]||'').trim();
+          let cust='';for(let j=taxRowIdx;j>=0;j--){const c=String(rows[j][cF]||'').trim();if(c){cust=c;break;}}
+          if(!cust)return null;
+          const peers=[];
+          for(let j=taxRowIdx-1;j>=1;j--){
+            const r=rows[j];const rc=String(r[cF]||'').trim();
+            if(rc&&rc!==cust)break;if(String(r[cClass]||'').trim()!==sa)break;
+            if(TAX_IDS.has(String(r[cI]||'').trim()))break;
+            peers.push(r);
+          }
+          const base=peers.filter(r=>['1001','1002','1003','1005'].includes(String(r[cI]||'').trim())).reduce((s,r)=>s+(parseFloat(r[cQ])||0)*(parseFloat(r[cP])||0),0);
+          const disc=peers.filter(r=>String(r[cI]||'').trim()==='1096').reduce((s,r)=>s+(parseFloat(r[cP])||0),0);
+          return{base:r2(base),disc:r2(disc)};
+        }
+        g.hstRows.forEach(tr=>{
+          const taxAmt=parseFloat(tr.row[cP])||0;const peers=getTaxPeers(tr.i);if(!peers)return;
+          const taxBase=r2(peers.base+peers.disc);const expTax=r2(taxBase*0.13);
+          const sev=!withinTol(taxAmt,expTax)?'error':'ok';
+          AUDIT.push({id:mkId(),type:'hst',sev,fileKey:key,sheet:sName,custId:cId,sa:tr.sa,desc:'HST (13%)',calc:`$${taxBase} × 13% = $${expTax}`,billed:taxAmt,calcAmt:expTax,rowIdx:tr.i,decision:sev==='ok'?'accept':null,note:sev==='error'?`Billed $${taxAmt}, expected $${expTax}`:'',fix:sev!=='ok'?`Change PRICE from ${taxAmt} to ${expTax}`:'',fixRow:[...tr.row],hdr});
+        });
+        g.vatRows.forEach(tr=>{
+          const taxAmt=parseFloat(tr.row[cP])||0;const peers=getTaxPeers(tr.i);if(!peers)return;
+          const taxBase=r2(peers.base+peers.disc);const expTax=r2(taxBase*0.16);
+          const sev=!withinTol(taxAmt,expTax)?'error':'ok';
+          AUDIT.push({id:mkId(),type:'vat',sev,fileKey:key,sheet:sName,custId:cId,sa:tr.sa,desc:'VAT (16%)',calc:`$${taxBase} × 16% = $${expTax}`,billed:taxAmt,calcAmt:expTax,rowIdx:tr.i,decision:sev==='ok'?'accept':null,note:sev==='error'?`Billed $${taxAmt}, expected $${expTax}`:'',fix:sev!=='ok'?`Change PRICE from ${taxAmt} to ${expTax}`:'',fixRow:[...tr.row],hdr});
+        });
+
+        // Monthly pricing proration — DB verified if connected
+        g.mpRows.forEach(mr=>{
+          const price=parseFloat(mr.row[cP])||0;
+          if(price%1===0||price<=0)return;
+          const agmts=DB.connected?(DB.flatRateMap[mr.sa]||[]):[];
+            // Match by rate: find the agreement whose rate closest matches the billed amount
+            // (before proration, the full rate is billed for full periods; for prorated rows
+            //  the billed amount is a fraction — find the agreement where rate >= billed)
+            const priceNum=parseFloat(mr.row[cP])||0;
+            let agmt=null;
+            if(agmts.length===1){
+              agmt=agmts[0];
+            } else if(agmts.length>1){
+              // Try exact rate match first, then closest rate >= billed price
+              agmt=agmts.find(a=>r2(parseFloat(a.rate||0))===r2(priceNum))
+                ||agmts.filter(a=>parseFloat(a.rate||0)>=priceNum)
+                  .sort((a,b)=>parseFloat(a.rate)-parseFloat(b.rate))[0]
+                ||agmts.sort((a,b)=>(b.startTime||'').localeCompare(a.startTime||''))[0];
+            }
+          if(agmt&&(agmt.startTime||agmt.expireTime)){
+            const aStart=agmt.startTime?new Date(agmt.startTime):new Date(pStart);
+            const aEnd=agmt.expireTime?new Date(agmt.expireTime):new Date(pEnd);
+            const activeStart=new Date(Math.max(aStart,new Date(pStart)));
+            const activeEnd=new Date(Math.min(aEnd,new Date(pEnd)));
+            const activeWD=countWeekdays(activeStart,activeEnd);
+            const monthlyRate=agmt.rate?parseFloat(agmt.rate):null;
+            const expectedPro=monthlyRate?r2((activeWD/totalWD())*monthlyRate):null;
+            const sev=expectedPro!==null&&!withinTol(price,expectedPro)?'error':'flag';
+            AUDIT.push({id:mkId(),type:'prorate',sev,fileKey:key,sheet:sName,custId:cId,sa:mr.sa,
+              desc:'Monthly Pricing — pro-ration (DB verified)',
+              calc:expectedPro!==null?`Active WD: ${activeWD}/${totalWD()} · Rate $${monthlyRate} → $${expectedPro}`:`Active WD: ${activeWD}/${totalWD()} · Start: ${agmt.startTime||'–'} End: ${agmt.expireTime||'–'}`,
+              billed:price,calcAmt:expectedPro,rowIdx:mr.i,
+              decision:sev==='ok'||sev==='flag'&&expectedPro===null?null:null,
+              note:sev==='error'?`Billed $${price}, expected $${expectedPro}`:'Agreement dates confirmed from Qnet DB',
+              fix:expectedPro&&sev==='error'?`Change PRICE from ${price} to ${expectedPro}`:'',fixRow:[...mr.row],hdr});
+          } else {
+            AUDIT.push({id:mkId(),type:'prorate',sev:'flag',fileKey:key,sheet:sName,custId:cId,sa:mr.sa,
+              desc:'Monthly Pricing — pro-ration'+(DB.connected?' (no agreement dates in DB)':''),
+              calc:`Billed: $${price} (non-round) · Formula: (active WD ÷ ${totalWD()}) × monthly rate`,
+              billed:price,calcAmt:null,rowIdx:mr.i,decision:null,
+              note:DB.connected?'Agreement found but no start/end dates — verify in Qnet':'DB not connected — verify agreement dates in Qnet',
+              fix:'',fixRow:[...mr.row],hdr});
+          }
+        });
+
+        // Weekend production — informational
+        g.wpRows.forEach(wp=>{
+          const price=parseFloat(wp.row[cP])||0;if(price===0)return;
+          const hasContracted=g.rows1001.some(r=>r.sa===wp.sa);
+          AUDIT.push({id:mkId(),type:'wp',sev:'ok',fileKey:key,sheet:sName,custId:cId,sa:wp.sa,
+            desc:'Weekend production',calc:`${hasContracted?'Contracted':'Flat/Monthly'} · Qty: ${wp.row[cQ]} · $${price}`,
+            billed:null,calcAmt:null,rowIdx:wp.i,decision:'accept',note:'',fix:'',fixRow:[...wp.row],hdr});
+        });
+
+        // ── CONTRACTED UNITS + FULL-WEEK SHUTDOWN (Normal invoice setting only) ──
+        // For "Normal" customers: contracted units should be $0 for a full Mon–Fri shutdown week.
+        // "Days The Plant Is Open" customers excluded — Qnet handles per-day billing for them.
+        if(DB.connected&&(key==='A'||key==='B')){
+          const invoiceSetting=DB.invoiceSettings[cId]||null;
+          if(invoiceSetting==='Normal'){
+            const cDateCol=hdr.indexOf('SI_LINEITEM_DATE');
+            if(cDateCol!==-1){
+              g.rows1001.forEach(r1001=>{
+                  if(!r1001.sa)return;
+                  const weekStr=String(r1001.row[cDateCol]||'').trim();
+                  const weekMatch=weekStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+                  if(!weekMatch)return;
+                  const weekStart=new Date(`${weekMatch[3]}-${weekMatch[1]}-${weekMatch[2]}`);
+                  const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+4);
+                  const sds=getApplicableShutdowns(r1001.sa,
+                    weekStart.toISOString().slice(0,10),
+                    weekEnd.toISOString().slice(0,10),null);
+                  const fullWeekSd=sds.find(sd=>{
+                    const ss=new Date(sd.startTime),se=new Date(sd.endTime);
+                    return ss<=weekStart&&se>=weekEnd;
+                  });
+                  if(fullWeekSd&&(parseFloat(r1001.row[cP])||0)>0){
+                    AUDIT.push({id:mkId(),type:'contracted-shutdown',sev:'error',
+                      fileKey:key,sheet:sName,custId:cId,sa:r1001.sa,
+                      desc:'Contracted units billed during full-week shutdown (Normal setting)',
+                      calc:`Week of ${weekStr} · Shutdown: ${fullWeekSd.reason||'Plant shutdown'} (${fullWeekSd.startTime}\u2013${fullWeekSd.endTime})`,
+                      billed:parseFloat(r1001.row[cP])||0,calcAmt:0,rowIdx:r1001.i,decision:null,
+                      note:`${cId} has invoice setting "Normal" \u2014 contracted units should be $0 for a full Mon\u2013Fri shutdown week.`,
+                      fix:'Set PRICE to 0 for this contracted units row.',fixRow:[...r1001.row],hdr});
+                  }
+                });
+            }
+          }
+        }
+
+        // ── SHUTDOWN CREDIT VERIFICATION (DB-driven, Item D only) ──
+        // Shutdown credits apply ONLY to Flat Rate and Monthly Pricing agreements (Item D).
+        // Contracted Units (Items A/B/C) handle shutdowns differently in Qnet — not checked here.
+        // Rule: only FULL Mon–Fri week shutdowns generate a credit (20% of monthly rate per week).
+        // If every week of the period is shut down, credit is 100% regardless of week count.
+        if(DB.connected && key==='D'){
+          // Only check SAs that appear on flat rate (1005) or monthly pricing rows
+          const saSet=new Set([...g.flatRows.map(r=>r.sa),...g.mpRows.map(r=>r.sa)]);
+          saSet.forEach(sa=>{
+            if(!sa)return;
+            // Skip Marelli-suppressed SAs — they bill $0 so no credit is needed
+            if(DB.marelliFlatZeroSAs.has(sa))return;
+            const agmtList=(DB.flatRateMap[sa]||[]).filter(a=>!DB.marelliFlatZeroSAs.has(a.sageLocationCode));
+            if(!agmtList.length)return; // no priced agreements for this SA
+            let agmt=null;
+            if(agmtList.length===1){
+              agmt=agmtList[0];
+            } else {
+              // Multiple agreements — try to match by the billed flat/monthly rate on the export row
+              const billedRate=parseFloat(
+                (g.flatRows.find(r=>r.sa===sa)||g.mpRows.find(r=>r.sa===sa))?.row[cP]||0
+              );
+              agmt=agmtList.find(a=>r2(parseFloat(a.rate||0))===r2(billedRate))
+                ||agmtList.sort((a,b)=>(b.startTime||'').localeCompare(a.startTime||''))[0];
+            }
+            if(!agmt)return;
+            const sds=getApplicableShutdowns(sa,pStart,pEnd,agmt.agreementNumber);
+            const fullWeeks=countFullShutdownWeeks(sds,pStart,pEnd);
+            const creditRows=g.shutdownRows.filter(r=>r.sa===sa);
+            const rate=parseFloat(agmt.rate)||0;
+            const freq=agmt.flatRateFrequency||'Monthly';
+
+            if(!sds.length){
+              // No shutdowns in DB for this SA — if there IS a credit row in the export, flag it
+              if(creditRows.length>0){
+                const billedCredit=creditRows.reduce((s,r)=>s+Math.abs(parseFloat(r.row[cP])||0),0);
+                AUDIT.push({id:mkId(),type:'shutdown-credit',sev:'flag',fileKey:key,sheet:sName,custId:cId,sa,
+                  desc:'Shutdown credit present but no shutdown found in DB',
+                  calc:`Credit billed: $${billedCredit} — no matching shutdown in Qnet for this SA`,
+                  billed:-billedCredit,calcAmt:null,rowIdx:creditRows[0].i,decision:null,
+                  note:'Verify in Qnet — shutdown may not have been logged, or credit may be incorrect.',
+                  fix:'',fixRow:null,hdr});
+              }
+              return;
+            }
+
+            const sdDesc=sds.map(sd=>`${sd.reason||'Shutdown'} (${sd.startTime}–${sd.endTime})`).join('; ');
+
+            if(fullWeeks===0){
+              // Shutdowns exist but none are full Mon–Fri weeks — no credit should apply
+              if(creditRows.length>0){
+                const billedCredit=creditRows.reduce((s,r)=>s+Math.abs(parseFloat(r.row[cP])||0),0);
+                AUDIT.push({id:mkId(),type:'shutdown-credit',sev:'error',fileKey:key,sheet:sName,custId:cId,sa,
+                  desc:'Shutdown credit billed but no full-week shutdown found',
+                  calc:`Shutdowns found: ${sdDesc} — none span full Mon–Fri week`,
+                  billed:-billedCredit,calcAmt:0,rowIdx:creditRows[0].i,decision:null,
+                  note:'Per billing rules, only full Mon–Fri week shutdowns generate a credit. Partial weeks = no credit.',
+                  fix:`Remove shutdown credit row (PRICE should be 0)`,fixRow:[...creditRows[0].row],hdr});
+              }
+              // No full weeks and no credit row = correct, nothing to flag
+              return;
+            }
+
+            // Full week shutdowns exist — calculate expected credit
+            // Rule: if every week of billing period is shut down → 100% credit
+            const totalPeriodWeeks=countFullShutdownWeeks(
+              [{startTime:pStart,endTime:pEnd}],pStart,pEnd
+            );
+            const allWeeksShutdown=totalPeriodWeeks>0&&fullWeeks>=totalPeriodWeeks;
+            const expectedCredit=allWeeksShutdown?rate:calcFlatRateCredit(rate,freq,fullWeeks);
+            const billedCredit=creditRows.reduce((s,r)=>s+Math.abs(parseFloat(r.row[cP])||0),0);
+
+            if(creditRows.length===0){
+              AUDIT.push({id:mkId(),type:'shutdown-credit',sev:'error',fileKey:key,sheet:sName,custId:cId,sa,
+                desc:`Shutdown credit MISSING — ${fullWeeks} full week${fullWeeks>1?'s':''}${allWeeksShutdown?' (full period — 100% credit)':''}`,
+                calc:`${fullWeeks} full wk${fullWeeks>1?'s':''} × 20% of $${rate} = $${expectedCredit}`,
+                billed:0,calcAmt:-expectedCredit,
+                rowIdx:g.flatRows.find(r=>r.sa===sa)?.i??g.mpRows.find(r=>r.sa===sa)?.i??0,
+                decision:null,
+                note:`DB shutdowns: ${sdDesc}. Add shutdown credit row of -$${expectedCredit}.`,
+                fix:`Add: ITEMID 1005, PRICE -${expectedCredit}, DESC "Shutdown Credit"`,fixRow:null,hdr});
+            } else {
+              const sev=!withinTol(billedCredit,expectedCredit)?'error':'ok';
+              AUDIT.push({id:mkId(),type:'shutdown-credit',sev,fileKey:key,sheet:sName,custId:cId,sa,
+                desc:`Shutdown credit — ${fullWeeks} full week${fullWeeks>1?'s':''}${allWeeksShutdown?' (100% — full period)':''} — DB verified`,
+                calc:`${allWeeksShutdown?'Full period shutdown → 100% credit':'${fullWeeks} wks × 20%'} of $${rate} = $${expectedCredit}`,
+                billed:-billedCredit,calcAmt:-expectedCredit,rowIdx:creditRows[0].i,
+                decision:sev==='ok'?'accept':null,
+                note:sev==='error'?`Billed $${billedCredit}, expected $${expectedCredit}`:`Shutdowns: ${sdDesc}`,
+                fix:sev==='error'?`Change credit to -${expectedCredit}`:'',
+                fixRow:sev==='error'?[...creditRows[0].row]:null,hdr});
+            }
+          });
+        }
+
+        // Missing Customer Code
+        const cLINE=hdr.indexOf('LINE');
+        rows.forEach((row,i)=>{
+          if(i===0)return;
+          if(key==='B')return; // Item B totaled report has blank CUSTOMER_ID on line 1 by design
+          const lineVal=cLINE!==-1?String(row[cLINE]||'').trim():'';
+          const custVal=String(row[cF]||'').trim();
+          const saVal=String(row[cClass]||'').trim();
+          const itemVal=String(row[cI]||'').trim();
+          if(lineVal==='1'&&!custVal&&saVal&&['1001','1002','1003','1005','1047','1053'].includes(itemVal)){
+            AUDIT.push({id:mkId(),type:'missing-cust',sev:'error',fileKey:key,sheet:sName,custId:'(missing)',sa:saVal,
+              desc:'Missing CUSTOMER_ID on invoice',calc:`Row ${i}: LINE=1, SA=${saVal}, ITEMID=${itemVal}`,
+              billed:null,calcAmt:null,rowIdx:i,decision:null,
+              note:'Sage will reject or mispost this import.',
+              fix:'Add the correct CUSTOMER_ID',fixRow:[...row],hdr});
+          }
+        });
+
+        // Missing SA Code
+        rows.forEach((row,i)=>{
+          if(i===0)return;
+          const saVal=String(row[cClass]||'').trim();
+          const itemVal=String(row[cI]||'').trim();
+          const priceVal=parseFloat(row[cP]||0);
+          if(!saVal&&['1001','1002','1003','1005','1047','1053','1096'].includes(itemVal)&&priceVal!==0){
+            let cust='(unknown)';for(let j=i;j>=0;j--){if(String(rows[j][cF]||'').trim()){cust=String(rows[j][cF]).trim();break;}}
+            AUDIT.push({id:mkId(),type:'missing-sa',sev:'error',fileKey:key,sheet:sName,custId:cust,sa:'(missing)',
+              desc:'Missing agreement code (col M)',calc:`Row ${i}: ITEMID=${itemVal}, PRICE=${priceVal}`,
+              billed:null,calcAmt:null,rowIdx:i,decision:null,
+              note:'Sage requires an SA code on every billing line.',
+              fix:'Add the correct agreement code before import.',fixRow:[...row],hdr});
+          }
+        });
+
+
+        // ── N.S. INTERNATIONAL (C10412) — no additional hours ─────────────
+        if(cId==='C10412'){
+          const nsAddlRows=[];
+          let curNS='';
+          rows.forEach((row,i)=>{
+            if(i===0)return;
+            if(row[cF]&&row[cF]!=='')curNS=String(row[cF]).trim();
+            if(curNS==='C10412'&&String(row[cI]||'').trim()==='1002')
+              nsAddlRows.push({i,row,sa:String(row[cClass]||'').trim()});
+          });
+          if(nsAddlRows.length>0){
+            AUDIT.push({id:mkId(),type:'no-addl-hrs',sev:'error',fileKey:key,sheet:sName,custId:'C10412',sa:nsAddlRows[0].sa,
+              desc:'N.S. International — additional hours (1002) should not be billed',
+              calc:`${nsAddlRows.length} row${nsAddlRows.length!==1?'s':''} with ITEMID 1002 found`,
+              billed:null,calcAmt:null,rowIdx:nsAddlRows[0].i,decision:null,
+              note:'Per SOP: N.S. International does not get billed additional hours. Remove these rows or charge to New Sabina Industries (C10960).',
+              fix:'Remove 1002 rows for C10412',fixRow:null,hdr});
+          }
+        }
+      });
+    });
+  });
+
+  renderDecisions();
+  setStep(3);
+}
+
+// ── RENDER STEP 3 ─────────────────────────────────────────────────────────
+function renderDecisions(){
+  const c=document.getElementById('s3');
+  const specChanges=CHANGES.filter(ch=>ch.approved===null);
+  const routineChanges=CHANGES.filter(ch=>ch.approved===true&&ch.type==='date-std');
+  const autoChanges=CHANGES.filter(ch=>ch.approved===true&&ch.type!=='date-std');
+  const holds=['Auria Solutions (C10061)','ZF Passive Safety (C10694)','Robert Bosch','PG&E'];
+
+  const qnetRequired=AUDIT.filter(a=>a.decision===null&&['prorate','missing-cust','missing-sa'].includes(a.type)&&a.calcAmt===null);
+  const decidableHere=AUDIT.filter(a=>a.decision===null&&a.sev!=='ok'&&!(['prorate','missing-cust','missing-sa'].includes(a.type)&&a.calcAmt===null));
+
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <h2 style="font-size:15px;font-weight:700">Step 3 — Review &amp; Approve Changes</h2>
+      <span style="font-size:12px;color:var(--t2)">${specChanges.length+decidableHere.length} decisions needed · ${qnetRequired.length} require Qnet action</span>
+    </div>
+    ${renderHolds(holds)}
+    <div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:flex-start;gap:10px">
+      <div style="flex-shrink:0;margin-top:1px;font-size:16px">⚙️</div>
+      <div><div style="font-size:13px;font-weight:700;margin-bottom:2px">Automated Changes — Review &amp; Approve</div>
+      <div style="font-size:12px;color:var(--t2)">Detected and staged automatically from billing rules. Nothing writes until you click <b>Generate CSVs</b>.</div></div>
+    </div>
+    ${renderRoutine(routineChanges)}
+    ${autoChanges.length?renderAutoChanges(autoChanges):''}
+    ${renderSpecialChanges(specChanges)}
+    ${renderAuditDecisions(decidableHere)}
+    ${qnetRequired.length?`
+    <div style="background:#fff8ee;border:1px solid rgba(184,122,0,.3);border-radius:8px;padding:10px 14px;margin-bottom:10px;margin-top:16px;display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:16px">🔎</div>
+      <div><div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:2px">Manual Action Required — Check Qnet Before Proceeding</div>
+      <div style="font-size:12px;color:var(--t2)">These items couldn't be fully verified from the DB. Address before importing to Sage.</div></div>
+    </div>
+    ${renderManualItems(qnetRequired)}`:''}
+    <div style="background:var(--surf);border:1px solid var(--bd);border-radius:8px;padding:13px 16px;margin-top:4px">
+      <div class="btn-row">
+        <button class="btn" onclick="approveAll()">✓ Approve All Automated</button>
+        <button class="btn btn-g" onclick="generate()">⚙ Generate CSVs →</button>
+        <span style="font-size:12px;color:var(--t2)" id="genStat"></span>
+      </div>
+    </div>`;
+  c.classList.remove('hidden');
+  c.scrollIntoView({behavior:'smooth'});
+  updateGenStat();
+}
+
+function renderHolds(holds){
+  return`<div class="rev hold"><div class="rev-hdr" onclick="toggleRev(this)">🚫 DO NOT EMAIL — Await Special Billing <span class="cnt">${holds.length}</span><button class="tog">hide</button></div>
+  <div class="rev-body">${holds.map(h=>`<div class="fr" style="padding:9px 14px"><span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red)">${h}</span><span style="color:var(--t2);font-size:12px;margin-left:8px">Complete special billing before emailing invoices</span></div>`).join('')}</div></div>`;
+}
+
+function renderRoutine(changes){
+  if(!changes.length)return'';
+  const byFS={};changes.forEach(c=>{const k=`Item ${c.fileKey}/${c.sheet}`;if(!byFS[k])byFS[k]={count:0,b:c.before,a:c.after};byFS[k].count+=(c.count||1);});
+  return`<div class="rev routine"><div class="rev-hdr" onclick="toggleRev(this)">✓ Routine Date Application <span class="cnt">${Object.values(byFS).reduce((s,v)=>s+v.count,0)} invoices — no action needed</span><button class="tog">show</button></div>
+  <div class="rev-body collapsed">
+    <div class="chrow hrow"><div class="cc">File/Sheet</div><div class="cc">From</div><div class="cc">To</div><div class="cc">Count</div></div>
+    ${Object.entries(byFS).map(([k,v])=>`<div class="chrow"><div class="cc" style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red)">${k}</div><div class="cc"><span class="cbf">${v.b}</span></div><div class="cc"><span class="caf">${v.a}</span></div><div class="cc" style="font-size:11px;color:var(--t2)">${v.count}</div></div>`).join('')}
+  </div></div>`;
+}
+
+function renderAutoChanges(changes){
+  // Auto-applied changes that don't need approval (marelli-suppress, etc.)
+  return`<div class="rev routine" style="margin-bottom:8px">
+    <div class="rev-hdr" onclick="toggleRev(this)">✅ Auto-Applied Rules (DB-Verified) <span class="cnt">${changes.length} change${changes.length!==1?'s':''}</span><button class="tog">show</button></div>
+    <div class="rev-body collapsed">
+      <div class="chrow hrow"><div class="cc">Customer / SA</div><div class="cc">Rule Applied</div><div class="cc">Source</div><div class="cc">Status</div></div>
+      ${changes.map(ch=>`<div class="chrow">
+        <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
+          <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red)">${ch.custId}</span>
+          <span style="font-size:10px;color:var(--t3)">${ch.sa||''}</span>
+        </div>
+        <div class="cc" style="flex-direction:column;gap:2px">
+          <span style="font-size:11px;font-weight:500">${ch.after}</span>
+          <span style="font-size:10px;color:var(--t2);font-style:italic">${ch.reason}</span>
+        </div>
+        <div class="cc" style="font-size:10px;color:var(--blue);font-family:'DM Mono',monospace">Qnet DB</div>
+        <div class="cc"><span style="font-size:11px;color:var(--green);font-weight:600">✓ Auto</span></div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderSpecialChanges(changes){
+  if(!changes.length)return`<div class="rev routine"><div class="rev-hdr">✓ No Special Rule Changes Detected</div></div>`;
+  const byType={'date-special':{label:'Special Date Overrides',icon:'📅',items:[]},'block':{label:'Import Blocking (#)',icon:'🚫',items:[]},'split':{label:'Invoice Splits',icon:'✂️',items:[]}};
+  changes.forEach(c=>{if(byType[c.type])byType[c.type].items.push(c);});
+  return Object.entries(byType).filter(([,v])=>v.items.length>0).map(([,{label,icon,items}])=>`
+    <div class="rev needs"><div class="rev-hdr" onclick="toggleRev(this)">${icon} ${label} <span class="cnt">${items.length} change${items.length!==1?'s':''} — approve or deny</span><button class="tog">hide</button></div>
+    <div class="rev-body">
+      <div class="chrow hrow"><div class="cc">Customer</div><div class="cc">Before</div><div class="cc">After / Reason</div><div class="cc">Decision</div></div>
+      ${items.map(ch=>`<div class="chrow" id="cr-${ch.id}">
+        <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
+          <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red)">${ch.custId}</span>
+          <span style="font-size:10px;color:var(--t2)">${CUST_NAMES[ch.custId]||''}</span>
+          <span style="font-size:10px;color:var(--t3)">Item ${ch.fileKey}/${ch.sheet}</span>
+        </div>
+        <div class="cc"><span class="cbf">${ch.before}</span></div>
+        <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
+          <span class="caf">${ch.after}</span>
+          <span style="font-size:10px;color:var(--t2);font-style:italic">${ch.reason}</span>
+        </div>
+        <div class="apc">
+          <button class="ap ok" id="ap-${ch.id}" onclick="decide(${ch.id},true)">✓</button>
+          <button class="ap no" id="dn-${ch.id}" onclick="decide(${ch.id},false)">✕</button>
+        </div>
+      </div>`).join('')}
+    </div></div>`).join('');
+}
+
+function renderAuditDecisions(items){
+  if(!items.length)return`<div class="rev routine"><div class="rev-hdr">✓ No Billing Discrepancies Detected</div></div>`;
+  const errors=items.filter(a=>a.sev==='error');
+  const flags=items.filter(a=>a.sev==='flag');
+  const typeInfo={
+    'shutdown-credit':{l:'Shutdown Credits',i:'🏭',d:'DB-verified: checks whether shutdown credit rows in the export match active shutdowns found in the Qnet database. Full-location shutdowns apply to all SAs at that plant. Agreement-specific shutdowns are scoped to matching SAs only. For Flat Rate agreements, calculates the expected credit amount by frequency (Monthly=20%, Quarterly=1/13, Annual=1/52 of the flat rate).'},
+    'vol-disc':{l:'Volume Discounts',i:'📊',d:'Confirms the discount % applied in each 1096 row matches its ITEMDESC statement. Source of truth is the stated % in the description.'},
+    'hst':{l:'HST Tax (13%)',i:'🧾',d:'Verifies HST rows (1053) for Canadian agreements. Tax base = net billable amount for that invoice group.'},
+    'vat':{l:'VAT Tax (16%)',i:'🧾',d:'Verifies VAT rows (1047) for E200 Mexico agreements. Tax base = net billable amount × 16%.'},
+    'prorate':{l:'Monthly Pricing Pro-ration',i:'📅',d:'DB-verified where agreement start/end dates exist in Qnet. Calculates (active weekdays ÷ total period weekdays) × monthly rate. If DB has no dates, flags for manual check.'},
+    'wp':{l:'Weekend Production',i:'🗓',d:'Verifies WP rows (1003). Informational — amounts set by agreement in Qnet.'},
+    'missing-cust':{l:'Missing Customer Codes',i:'🚨',d:'Invoices with no CUSTOMER_ID — will fail or mispost in Sage.'},
+    'missing-sa':{l:'Missing Agreement Codes',i:'🚨',d:'Billing rows with no SA code — Sage requires this to post correctly.'},
+      'no-addl-hrs':{l:'Additional Hours — Should Not Be Billed',i:'🔀',d:'N.S. International (C10412) additional hours (1002 rows) should not be billed. Per SOP, these should be removed or charged to New Sabina Industries (C10960).'},
+      'contracted-shutdown':{l:'Contracted Units During Full-Week Shutdown',i:'🏭',d:'Contracted units billed during a full Mon-Fri shutdown week. Only flags Normal-setting customers — DB-verified.'},
+    };
+  const byType={};items.forEach(a=>{if(!byType[a.type])byType[a.type]=[];byType[a.type].push(a);});
+  return`<div style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+      <span style="font-size:13px;font-weight:700">📋 Billing Audit</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${errors.length?`<span class="abadge ab-e">${errors.length} error${errors.length!==1?'s':''}</span>`:''}
+        ${flags.length?`<span class="abadge ab-f">${flags.length} flagged</span>`:''}
+        <button class="ap ok" style="font-size:11px;padding:3px 10px" onclick="auditApproveAllSections()">✓ Approve All</button>
+      </div>
+    </div>
+    ${Object.entries(byType).map(([type,aitems])=>{
+      const {l,i,d}=typeInfo[type]||{l:type,i:'📋',d:''};
+      const errCnt=aitems.filter(a=>a.sev==='error').length;
+      const flagCnt=aitems.filter(a=>a.sev==='flag').length;
+      const secCls=errCnt?'danger':flagCnt?'needs':'routine';
+      return`<div class="rev ${secCls}" style="margin-bottom:8px">
+        <div class="rev-hdr" onclick="toggleRev(this)" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
+          <span>${i} ${l}</span><span class="cnt">${aitems.length}</span>
+          ${errCnt?`<span class="abadge ab-e">${errCnt} error${errCnt!==1?'s':''}</span>`:''}
+          ${flagCnt?`<span class="abadge ab-f">${flagCnt} flagged</span>`:''}
+          <div style="margin-left:auto;display:flex;gap:5px" onclick="event.stopPropagation()">
+            <button class="ap ok" style="font-size:11px;padding:3px 9px" onclick="approveSection('${type}')">✓ All</button>
+            <button class="ap skip" style="font-size:11px;padding:3px 9px" onclick="skipSection('${type}')">— All</button>
+            <button class="tog" style="margin-left:4px">hide</button>
+          </div>
+          ${d?`<div style="width:100%;font-size:11px;font-weight:400;opacity:.75;padding-top:2px;line-height:1.5">${d}</div>`:''}
+        </div>
+        <div class="rev-body">
+          <div class="chrow hrow"><div class="cc">Customer / SA</div><div class="cc">Check &amp; Calc</div><div class="cc">Billed vs Expected</div><div class="cc">Action</div></div>
+          ${aitems.map(a=>{
+            const sv=a.sev==='error'?'❌':a.sev==='flag'?'⚠':'✓';
+            const diff=a.calcAmt!==null&&a.billed!==null?r2(a.billed-a.calcAmt):null;
+            return`<div class="chrow" id="ac-${a.id}">
+              <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
+                <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--red)">${a.custId}</span>
+                <span style="font-size:10px;color:var(--t3)">${a.sa}</span>
+                <span style="font-size:10px;color:var(--t3)">Item ${a.fileKey}/${a.sheet}</span>
+              </div>
+              <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
+                <span style="font-size:11px;font-weight:600">${sv} ${a.desc}</span>
+                <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${a.calc.replace(/\n/g,'<br/>')}</span>
+                ${a.note?`<span style="font-size:10px;color:var(--amber);font-style:italic">${a.note}</span>`:''}
+              </div>
+              <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
+                ${a.billed!==null?`<span style="font-size:11px">Billed: <b>$${a.billed}</b>${a.calcAmt!==null?` · Expected: <b>$${a.calcAmt}</b>`:''}</span>`:''}
+                ${diff!==null?`<span style="font-size:10px;color:${diff!==0?'var(--red)':'var(--green)'}">${diff>=0?'+':''}$${diff}</span>`:''}
+              </div>
+              <div class="apc">
+                <button class="ap ok" id="aok-${a.id}" onclick="adecide(${a.id},'accept')">✓</button>
+                ${a.fix?`<button class="ap fix" id="afix-${a.id}" onclick="adecide(${a.id},'fix')">Fix</button>`:''}
+                <button class="ap skip" id="ask-${a.id}" onclick="adecide(${a.id},'skip')">—</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderManualItems(items){
+  const typeGroups={
+    'prorate':{icon:'📅',label:'Monthly Pricing Pro-ration — No Agreement Dates in DB',action:'Open Qnet → find this agreement → check Start/End Date → verify billed amount = (active WD ÷ total WD) × monthly rate.',cls:'needs',editable:false},
+    'missing-cust':{icon:'🚨',label:'Missing Customer Code (CUSTOMER_ID — Col F)',action:'Enter the correct customer code below and click Apply, or look it up in Qnet and re-export.',cls:'danger',editable:true,placeholder:'e.g. C10123',colName:'CUSTOMER_ID'},
+    'missing-sa':{icon:'🚨',label:'Missing Agreement Code (Col M — SODOCUMENTENTRY_CLASSID)',action:'Enter the correct SA/agreement code below and click Apply, or look it up in Qnet and re-export.',cls:'danger',editable:true,placeholder:'e.g. L10456',colName:'SODOCUMENTENTRY_CLASSID'},
+  };
+  const byType={};items.forEach(a=>{if(!byType[a.type])byType[a.type]=[];byType[a.type].push(a);});
+  return Object.entries(byType).map(([type,aitems])=>{
+    const{icon,label,action,cls,editable,placeholder,colName}=typeGroups[type]||{icon:'⚠',label:type,action:'',cls:'needs',editable:false};
+    return`<div class="rev ${cls}" style="margin-bottom:8px">
+      <div class="rev-hdr" onclick="toggleRev(this)" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
+        <span>${icon} ${label}</span><span class="cnt">${aitems.length}</span>
+        <div style="margin-left:auto;display:flex;gap:5px" onclick="event.stopPropagation()">
+          <button class="ap skip" style="font-size:11px;padding:3px 9px" onclick="skipSection('${type}')">— Skip All</button>
+          <button class="tog" style="margin-left:4px">hide</button>
+        </div>
+        ${action?`<div style="width:100%;font-size:11px;opacity:.8;padding-top:3px;line-height:1.5">${action}</div>`:''}
+      </div>
+      <div class="rev-body">
+        <div class="chrow hrow"><div class="cc">File/Row</div><div class="cc">Found</div><div class="cc">${editable?`Enter ${colName}`:'Why it matters'}</div><div class="cc">Status</div></div>
+        ${aitems.map(a=>`<div class="chrow" id="ac-${a.id}">
+          <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
+            <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--red)">${a.custId}</span>
+            <span style="font-size:10px;color:var(--t3)">${a.sa}</span>
+            <span style="font-size:10px;color:var(--t3)">Item ${a.fileKey}/${a.sheet} · row ${a.rowIdx}</span>
+          </div>
+          <div class="cc" style="flex-direction:column;gap:2px">
+            <span style="font-size:11px;font-weight:500">${a.desc}</span>
+            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${a.calc.replace(/\n/g,'<br/>')}</span>
+          </div>
+          ${editable?`<div class="cc" style="gap:6px">
+            <input type="text" id="codeinput-${a.id}" placeholder="${placeholder}"
+              style="background:var(--surf);border:1px solid var(--bd);border-radius:5px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:5px 8px;width:130px;outline:none"
+              onkeydown="if(event.key==='Enter')applyCodeFix(${a.id},'${type}')"/>
+            <button class="ap ok" style="font-size:11px;padding:4px 10px;flex-shrink:0" onclick="applyCodeFix(${a.id},'${type}')">Apply</button>
+          </div>`:`<div class="cc" style="font-size:11px;color:var(--t2);font-style:italic">${a.note}</div>`}
+          <div class="cc" id="codestatus-${a.id}"><button class="ap skip" onclick="adecide(${a.id},'skip')" style="font-size:11px;padding:3px 9px">— Skip</button></div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRev(hdr){const body=hdr.closest('.rev')?.querySelector('.rev-body');const btn=hdr.querySelector('.tog');if(!body)return;const col=body.classList.toggle('collapsed');if(btn)btn.textContent=col?'show':'hide';}
+function decide(id,approved){const ch=CHANGES.find(c=>c.id===id);if(!ch)return;ch.approved=approved;const a=document.getElementById('ap-'+id),d=document.getElementById('dn-'+id);if(a)a.classList.toggle('act',approved);if(d)d.classList.toggle('act',!approved);updateGenStat();}
+function adecide(id,choice){
+  const a=AUDIT.find(x=>x.id===id);if(!a)return;a.decision=choice;
+  const ok=document.getElementById('aok-'+id),fix=document.getElementById('afix-'+id),sk=document.getElementById('ask-'+id);
+  if(ok)ok.classList.toggle('act',choice==='accept');if(fix)fix.classList.toggle('act',choice==='fix');if(sk)sk.classList.toggle('act',choice==='skip');
+  updateGenStat();
+}
+function approveAll(){
+  CHANGES.filter(c=>c.approved===null).forEach(c=>{c.approved=true;const a=document.getElementById('ap-'+c.id),d=document.getElementById('dn-'+c.id);if(a)a.classList.add('act');if(d)d.classList.remove('act');});
+  AUDIT.filter(a=>a.decision===null&&a.sev!=='ok').forEach(a=>adecide(a.id,'accept'));
+  AUDIT.filter(a=>a.sev==='ok').forEach(a=>{a.decision='accept';});
+  updateGenStat();
+}
+function approveSection(type){AUDIT.filter(a=>a.type===type&&a.sev!=='ok').forEach(a=>adecide(a.id,'accept'));updateGenStat();}
+function skipSection(type){AUDIT.filter(a=>a.type===type&&a.sev!=='ok').forEach(a=>adecide(a.id,'skip'));updateGenStat();}
+function auditApproveAllSections(){AUDIT.filter(a=>a.sev!=='ok'&&a.decision===null).forEach(a=>adecide(a.id,'accept'));updateGenStat();}
+function updateGenStat(){
+  const pC=CHANGES.filter(c=>c.approved===null).length;
+  const pA=AUDIT.filter(a=>a.sev!=='ok'&&a.decision===null).length;
+  const stat=document.getElementById('genStat');
+  if(stat)stat.textContent=(pC+pA)>0?`${pC+pA} item${pC+pA!==1?'s':''} pending`:'All reviewed — ready';
+}
+function applyCodeFix(auditId,type){
+  const input=document.getElementById('codeinput-'+auditId);if(!input)return;
+  const val=input.value.trim();if(!val){input.style.borderColor='var(--red)';setTimeout(()=>{input.style.borderColor='var(--bd)';},1500);return;}
+  const a=AUDIT.find(x=>x.id===auditId);if(!a)return;
+  const colName=type==='missing-cust'?'CUSTOMER_ID':'SODOCUMENTENTRY_CLASSID';
+  CODE_FIXES[auditId]={fileKey:a.fileKey,sheet:a.sheet,rowIdx:a.rowIdx,colName,value:val};
+  a.decision='fix';a.fixedValue=val;
+  const statusEl=document.getElementById('codestatus-'+auditId);
+  const inputCell=input.closest('.cc');
+  if(statusEl)statusEl.innerHTML=`<span style="color:var(--green);font-family:'DM Mono',monospace;font-size:11px;font-weight:600">✓ ${val}</span>`;
+  if(inputCell)inputCell.innerHTML=`<span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--green);font-weight:600">${val}</span><button class="ap skip" style="font-size:10px;padding:2px 7px;margin-left:6px" onclick="undoCodeFix(${auditId},'${type}')">↩ Undo</button>`;
+  updateGenStat();
+}
+function undoCodeFix(auditId,type){const a=AUDIT.find(x=>x.id===auditId);if(a){a.decision=null;delete a.fixedValue;}delete CODE_FIXES[auditId];renderDecisions();}
+
+// ── GENERATE ──────────────────────────────────────────────────────────────
+function generate(){
+  const iABC=document.getElementById('iABC').value;
+  const gABC=document.getElementById('gABC').value;
+  const iD=document.getElementById('iD').value;
+  const gD=document.getElementById('gD').value;
+  CSV_DATA={}; LOG=[];
+
+  ['A','B','C','D'].forEach(key=>{
+    if(!WB[key])return;
+    const isD=key==='D';
+    const stdInv=fmt(isD?(iD||iABC):iABC);
+    const stdGl=fmt(isD?(gD||gABC):gABC);
+    const baseI=isD?(iD||iABC):iABC;
+    const baseG=isD?(gD||gABC):gABC;
+    CSV_DATA[key]={};
+
+    WB[key].SheetNames.forEach(sName=>{
+      const ws=WB[key].Sheets[sName];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      if(rows.length<2)return;
+      const hdr=rows[0];
+      const ci=(n)=>hdr.indexOf(n);
+      const cC=ci('DATE'),cD_=ci('GLPOSTINGDATE'),cF=ci('CUSTOMER_ID'),cK=ci('CURRENCY');
+      const cI=ci('ITEMID'),cP=ci('PRICE'),cClass=ci('SODOCUMENTENTRY_CLASSID');
+      if(cC===-1||cD_===-1)return;
+
+      const priceFixes={};
+      AUDIT.filter(a=>a.decision==='fix'&&a.fileKey===key&&a.sheet===sName&&a.calcAmt!==null)
+           .forEach(a=>{priceFixes[a.rowIdx]=a.calcAmt;});
+      const codeFixes={};
+      Object.values(CODE_FIXES).filter(f=>f.fileKey===key&&f.sheet===sName)
+        .forEach(f=>{codeFixes[f.rowIdx]={colName:f.colName,value:f.value};});
+
+      const lgSplit=CHANGES.some(c=>c.type==='split'&&c.fileKey===key&&c.sheet===sName&&c.approved===true);
+      const lgStay=[],lgMove=[];let lgHdr=null;let cust='';
+      let dateRowsUpdated=0,fixesApplied=0;
+
+      const newRows=rows.map((row,i)=>{
+        if(i===0)return[...row];
+        const nr=[...row];
+        if(row[cF]&&row[cF]!=='')cust=String(row[cF]).trim();
+        const cur=cK!==-1?String(row[cK]||'').trim().toUpperCase():'';
+        const hasDate=row[cC]&&row[cC]!=='';
+        const itemId=cI!==-1?String(row[cI]||'').trim():'';
+
+        // Price fix
+        if(priceFixes[i]!==undefined&&cP!==-1){nr[cP]=priceFixes[i];fixesApplied++;}
+
+        // Code fix (customer ID or SA)
+        if(codeFixes[i]!==undefined){
+          const{colName,value}=codeFixes[i];const colIdx=hdr.indexOf(colName);
+          if(colIdx!==-1){nr[colIdx]=value;fixesApplied++;LOG.push(`<span class="al-ok">  ✓ ${key}/${sName} row ${i}: set ${colName} = ${value}</span>`);}
+        }
+
+        // Marelli suppress
+        if(cust==='C10329'){
+          const sa=String(row[cClass]||'').trim();
+                    if(DB.connected&&DB.marelliFlatZeroSAs.has(sa)){
+            const chg=CHANGES.find(c=>c.type==='marelli-suppress'&&c.rowIdx===i&&c.fileKey===key&&c.sheet===sName);
+            if(!chg||chg.approved!==false){nr[0]='#';LOG.push(`<span class="al-ok">  ✓ ${key}/${sName} [C10329]: suppressed SA ${sa} (Flat Rate $0 — DB verified)</span>`);}
+          }
+        }
+
+        // Dates
+        if(hasDate){
+          let tI=stdInv,tG=stdGl,rule='';
+          const chg=CHANGES.find(c=>c.fileKey===key&&c.sheet===sName&&c.custId===cust&&c.type==='date-special');
+          if(chg&&chg.approved===false){tI=String(row[cC]);tG=String(row[cD_]||'');}
+          else if(cust==='C10916'){tI=nm1(baseI);rule='C10916→next month 1st';}
+          else if(cust==='C10897'){tI=lastDay(baseG);rule='C10897→last day';}
+          else if(cust==='C10884'&&key==='D'){const bd=bent(baseI);tI=bd.inv;tG=bd.gl;rule='C10884→Benteler dates';}
+          else if(cur==='EUR'){tI=tod();rule='EUR→today';}
+          if(rule)LOG.push(`<span class="al-ok">  ✓ ${key}/${sName} [${cust}]: ${rule}</span>`);
+          nr[cC]=tI;nr[cD_]=tG;dateRowsUpdated++;
+        }
+
+        // Block test accounts
+        if(key==='A'&&sName==='E100'){
+          const cid2=String(row[cF]||'').trim().toUpperCase();
+          if(cid2==='WCBUT'||cid2==='TEST1'){
+            const chg=CHANGES.find(c=>c.type==='block'&&c.custId===cid2&&c.fileKey===key);
+            if(!chg||chg.approved!==false){nr[0]='#';LOG.push(`<span class="al-warn">  # Blocked ${cid2} in E100</span>`);}
+          }
+        }
+
+        // LG split
+        if(lgSplit&&cust==='C10763'){
+          if(row[cF]==='C10763')lgHdr=[...nr];
+          if(itemId==='1002'){lgMove.push([...nr]);return null;}
+          else{lgStay.push([...nr]);return null;}
+        }
+        return nr;
+      }).filter(r=>r!==null);
+
+      let finalRows=newRows;
+      if(lgSplit&&lgStay.length){
+        let ln=1;lgStay.forEach((r,i)=>{if(i===0)r[hdr.indexOf('LINE')]=1;else if(r[hdr.indexOf('LINE')]!=='')r[hdr.indexOf('LINE')]=++ln;});
+        finalRows=[...newRows,...lgStay];
+        if(lgMove.length&&lgHdr){
+          const rh=[...Array(hdr.length).fill('')];rh[ci('CUSTOMER_ID')]='C10763';rh[cC]=lgHdr[cC];rh[ci('GLPOSTINGDATE')]=lgHdr[ci('GLPOSTINGDATE')];
+          if(ci('STATE')!==-1)rh[ci('STATE')]=lgHdr[ci('STATE')]||'Pending';
+          if(ci('TRANSACTIONTYPE')!==-1)rh[ci('TRANSACTIONTYPE')]='Sales Invoice';
+          rh[hdr.indexOf('LINE')]=1;
+          finalRows=[...finalRows,rh,...lgMove.map((r,i)=>{const nr=[...r];nr[hdr.indexOf('LINE')]=i+1;if(i>0){nr[ci('CUSTOMER_ID')]='';nr[cC]='';nr[ci('GLPOSTINGDATE')]='';}return nr;})];
+          LOG.push(`<span class="al-ok">  ✓ ${key}/${sName} [C10763]: LG split applied — ${lgMove.length} rows → Rework invoice</span>`);
+        }
+      }
+
+      if(dateRowsUpdated>0)LOG.push(`<span class="al-info">  ${key}/${sName}: ${dateRowsUpdated} invoice dates updated${fixesApplied>0?`, ${fixesApplied} price fix${fixesApplied!==1?'es':''} applied`:''}</span>`);
+      if(finalRows.length>1){CSV_DATA[key][sName]=toCSV(finalRows);}
+      else LOG.push(`<span class="al-info">  ${key}/${sName}: skipped — header only</span>`);
+    });
+  });
+
+  renderDownloads();
+  renderAuditReport();
+  document.getElementById('s4').classList.remove('hidden');
+  document.getElementById('s5').classList.remove('hidden');
+  document.getElementById('s4').scrollIntoView({behavior:'smooth'});
+  setStep(4);
+}
+
+function toCSV(rows){return rows.map(r=>r.map(c=>{const s=c===null||c===undefined?'':String(c);return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;}).join(',')).join('\r\n');}
+
+function renderDownloads(){
+  const fixed=AUDIT.filter(a=>a.decision==='fix').length;
+  const denied=CHANGES.filter(c=>c.approved===false).length;
+  let html=`<div style="background:rgba(42,140,90,.07);border:1px solid rgba(42,140,90,.2);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px">
+    <b style="color:var(--green)">✅ CSVs ready</b>${fixed?` · ${fixed} billing correction${fixed!==1?'s':''} applied`:''}${denied?` · ${denied} rule change${denied!==1?'s':''} denied`:''}</div>`;
+  ['A','B','C','D'].forEach(key=>{
+    if(!CSV_DATA[key])return;const sheets=Object.keys(CSV_DATA[key]).filter(s=>CSV_DATA[key][s]);if(!sheets.length)return;
+    html+=`<div class="dl-grp"><div class="dl-gh">
+      <span class="dl-lbl">ITEM ${key}</span><span style="font-size:12px;font-weight:500">${NM[key]} — ${FN[key]}</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn btn-s" style="font-size:11px;padding:4px 10px" onclick="dlItem('${key}')">⬇ All</button>
+        <button class="btn btn-b" style="font-size:11px;padding:4px 10px" onclick="upItem('${key}')">☁ SP</button>
+      </div></div>
+    <div class="csv-grid">${sheets.map(s=>`<div class="csv-i" id="csv-${key}-${s}" onclick="dlCSV('${key}','${s}')">
+      <span class="csv-ent">${s}</span><span class="csv-fn">${s}_${FN[key]}_MANIPULATED.csv</span><span id="cst-${key}-${s}">⬇</span>
+    </div>`).join('')}</div></div>`;
+  });
+  document.getElementById('dlContent').innerHTML=html;
+}
+
+// ── STEP 5: AUDIT REPORT ──────────────────────────────────────────────────
+function renderAuditReport(){
+  const errors=AUDIT.filter(a=>a.sev==='error');
+  const flags=AUDIT.filter(a=>a.sev==='flag');
+  const oks=AUDIT.filter(a=>a.sev==='ok');
+  const fixed=AUDIT.filter(a=>a.decision==='fix');
+  const skipped=AUDIT.filter(a=>a.decision==='skip');
+  const typeInfo={
+    'shutdown-credit':{l:'Shutdown Credits (DB Verified)'},
+    'vol-disc':{l:'Volume Discounts'},'hst':{l:'HST Tax (13%)'},'vat':{l:'VAT Tax (16%)'},
+    'prorate':{l:'Monthly Pricing Pro-ration'},'wp':{l:'Weekend Production'},
+    'missing-cust':{l:'Missing Customer Codes'},'missing-sa':{l:'Missing Agreement Codes'},
+      'no-addl-hrs':{l:'Additional Hours — Should Not Be Billed'},'contracted-shutdown':{l:'Contracted Units During Shutdown'},
+  };
+  const byType={};AUDIT.forEach(a=>{if(!byType[a.type])byType[a.type]=[];byType[a.type].push(a);});
+  const c=document.getElementById('s5');
+  c.innerHTML=`
+    <div class="card">
+      <div class="ch"><div class="cn" style="background:var(--blue)">5</div><div class="ct">Audit Report</div><div class="cd">Generated ${new Date().toLocaleString()}</div></div>
+      <div class="cb">
+        <div class="sbar">
+          <div class="sc ec"><div class="sv">${errors.length}</div><div class="sl2">Errors Found</div></div>
+          <div class="sc fc"><div class="sv">${flags.length}</div><div class="sl2">Flagged</div></div>
+          <div class="sc gc"><div class="sv">${oks.length}</div><div class="sl2">Passed</div></div>
+          <div class="sc" style="border-color:rgba(200,75,47,.3)"><div class="sv" style="color:var(--red)">${fixed.length}</div><div class="sl2">Fixes Applied</div></div>
+          <div class="sc"><div class="sv" style="color:var(--t2)">${skipped.length}</div><div class="sl2">Skipped</div></div>
+        </div>
+        ${DB.connected?`<div style="background:rgba(42,140,90,.07);border:1px solid rgba(42,140,90,.2);border-radius:6px;padding:7px 12px;font-size:11px;color:var(--green);margin-bottom:10px">✅ Shutdown credits, proration, and Marelli rules verified against live Qnet database</div>`:`<div style="background:rgba(184,122,0,.07);border:1px solid rgba(184,122,0,.2);border-radius:6px;padding:7px 12px;font-size:11px;color:var(--amber);margin-bottom:10px">⚠ Qnet DB was not connected — shutdown/proration checks used manual review mode</div>`}
+        <div class="audit-report">
+          <div class="ar-hdr">📋 Billing Check Results — All Items</div>
+          ${Object.entries(byType).map(([type,items])=>{
+            const{l}=typeInfo[type]||{l:type};
+            const errCnt=items.filter(a=>a.sev==='error').length;
+            const flagCnt=items.filter(a=>a.sev==='flag').length;
+            return`<div class="ar-section">
+              <div class="ar-sec-hdr" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+                ${l}
+                ${errCnt?`<span class="abadge ab-e">${errCnt} error${errCnt!==1?'s':''}</span>`:''}
+                ${flagCnt?`<span class="abadge ab-f">${flagCnt} flagged</span>`:''}
+                ${!errCnt&&!flagCnt?`<span class="abadge ab-ok">${items.length} ok</span>`:''}
+                <span style="margin-left:auto;font-size:10px;color:var(--t3)">click to expand</span>
+              </div>
+              <div class="collapsed">
+                <div class="ar-row hrow"><div class="arc">Customer</div><div class="arc">SA</div><div class="arc">Finding</div><div class="arc">Decision</div></div>
+                ${items.map(a=>{
+                  const dLabel=a.sev==='ok'?'✓ Passed':a.decision==='fix'?'🔧 Fixed':a.decision==='accept'?'✓ Accepted':a.decision==='skip'?'— Skipped':'Pending';
+                  return`<div class="ar-row">
+                    <div class="arc" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--red)">${a.custId}<br/><span style="font-weight:400;color:var(--t3)">Item ${a.fileKey}/${a.sheet}</span></div>
+                    <div class="arc" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${a.sa}</div>
+                    <div class="arc" style="flex-direction:column;align-items:flex-start;gap:2px">
+                      <span style="font-size:11px">${a.sev==='error'?'❌':a.sev==='flag'?'⚠':'✓'} ${a.desc}</span>
+                      <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${a.calc.split('\n')[0]}</span>
+                      ${a.billed!==null&&a.calcAmt!==null?`<span style="font-size:10px;color:${a.billed!==a.calcAmt?'var(--red)':'var(--green)'}">Billed $${a.billed} · Expected $${a.calcAmt}</span>`:''}
+                    </div>
+                    <div class="arc"><span class="verdict ${a.sev==='ok'||a.decision==='accept'?'v-ok':a.decision==='fix'?'v-err':a.decision==='skip'?'':'v-flag'}">${dLabel}</span></div>
+                  </div>`;
+                }).join('')}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;margin-top:12px">Processing Log</div>
+        <div class="applied-log">${LOG.length?LOG.join('\n'):'<span class="al-info">No special rules applied this run.</span>'}</div>
+      </div>
+    </div>`;
+  setStep(5);
+}
+
+// ── DOWNLOAD / SHAREPOINT ─────────────────────────────────────────────────
+function dlCSV(key,sheet){const csv=CSV_DATA[key]?.[sheet];if(!csv)return;const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${sheet}_${FN[key]}_MANIPULATED.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);}
+function dlItem(key){Object.keys(CSV_DATA[key]||{}).forEach((s,i)=>setTimeout(()=>dlCSV(key,s),i*300));}
+function downloadAll(){let d=0;['A','B','C','D'].forEach(k=>{if(!CSV_DATA[k])return;Object.keys(CSV_DATA[k]).forEach(s=>{setTimeout(()=>dlCSV(k,s),d*300);d++;});});}
+
+function buildSPPath(fn){
+  const y = document.getElementById('spYear').value.trim() || '2026';
+  const m = document.getElementById('spMonth').value.trim() || '03 March';
+  const { basePath, subFolder } = CONFIG.sharePoint;
+  return `${basePath}/${y}/${m}/${subFolder}/${fn}`;
+}
+
+async function uploadFileToSP(csv, spPath) {
+  try {
+    let token;
+    try {
+      token = await getGraphToken();
+    } catch(authErr) {
+      console.error('SharePoint auth failed:', authErr);
+      return false;
+    }
+    const { driveId } = CONFIG.sharePoint;
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${spPath}:/content`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/csv', 'Authorization': 'Bearer ' + token },
+        body: new Blob([csv], { type: 'text/csv' }),
+      }
+    );
+    if (r.status === 401) {
+      // Token may be stale — clear cache and surface error
+      console.error('Graph API 401 — user may need to re-authenticate');
+      return false;
+    }
+    return r.ok;
+  } catch(e) { return false; }
+}
+async function upItem(key){for(const s of Object.keys(CSV_DATA[key]||{}).filter(s=>CSV_DATA[key][s])){const el=document.getElementById(`csv-${key}-${s}`),st=document.getElementById(`cst-${key}-${s}`);if(el)el.className='csv-i upl';if(st)st.textContent='⏳';const ok=await uploadFileToSP(CSV_DATA[key][s],buildSPPath(`${s}_${FN[key]}_MANIPULATED.csv`));if(el)el.className=`csv-i ${ok?'done':'err'}`;if(st)st.textContent=ok?'✅':'❌';}}
+async function uploadAll(){document.getElementById('upBar').classList.remove('hidden');let total=0,done=0;['A','B','C','D'].forEach(k=>{if(CSV_DATA[k])total+=Object.keys(CSV_DATA[k]).filter(s=>CSV_DATA[k][s]).length;});for(const key of['A','B','C','D']){if(!CSV_DATA[key])continue;for(const s of Object.keys(CSV_DATA[key]).filter(s=>CSV_DATA[key][s])){const fn=`${s}_${FN[key]}_MANIPULATED.csv`;const el=document.getElementById(`csv-${key}-${s}`),st=document.getElementById(`cst-${key}-${s}`);if(el)el.className='csv-i upl';if(st)st.textContent='⏳';document.getElementById('upStat').textContent=`${done+1}/${total}: ${fn}`;const ok=await uploadFileToSP(CSV_DATA[key][s],buildSPPath(fn));done++;document.getElementById('upPf').style.width=((done/total)*100)+'%';if(el)el.className=`csv-i ${ok?'done':'err'}`;if(st)st.textContent=ok?'✅':'❌';}}document.getElementById('upStat').textContent='Done';document.getElementById('upOverall').textContent=`${document.querySelectorAll('.csv-i.done').length}/${total} uploaded`;}
+
+function resetAll(){
+  ['A','B','C','D'].forEach(k=>{WB[k]=null;FN[k]='';document.getElementById('sl-'+k).classList.remove('ld','dov');document.getElementById('sn-'+k).className='sno';document.getElementById('sn-'+k).textContent={A:'Monthly By Week',B:'Monthly Totaled',C:'Pre-Billing AH/WP',D:'Flat Rate'}[k];});
+  CHANGES=[];AUDIT=[];CSV_DATA={};LOG=[];cid=0;
+  document.getElementById('pbf').style.width='0%';document.getElementById('s2act').classList.add('hidden');
+  document.getElementById('s3').classList.add('hidden');document.getElementById('s3').innerHTML='';
+  document.getElementById('s4').classList.add('hidden');
+  document.getElementById('s5').classList.add('hidden');document.getElementById('s5').innerHTML='';
+  setStep(1);
+}
+
+// ── CONFIG (edit here, not in the code below) ─────────────────────────────
+const CONFIG = {
+  // SharePoint / Microsoft Graph
+  sharePoint: {
+    driveId:   'b!hXgO60x5vEKzea3VChsvvxIEpmav9XdHiekcU2vR7NFK71wG4gA_TJ5dxmXvpuer',
+    basePath:  'Shared Documents/Corporate Files/Accounting/Department Files/AR/Invoicing/Mthly Invoicing Docs',
+    subFolder: 'Monthly Rep',   // appended after year/month inputs
+  },
+  // Azure AD — replace clientId with your app registration's Application (client) ID
+  // Redirect URI must be registered in the app registration (can be the file's hosted URL or localhost)
+  msal: {
+    clientId:    '7a37853f-26b9-4f4a-a60b-f0f7c1a31aab',
+    tenantId:    '27050f3c-db65-437f-b52a-4c66d6383cd0',
+    redirectUri: window.location.origin + window.location.pathname,
+    scopes:      ['Files.ReadWrite', 'Sites.ReadWrite.All'],
+  },
+  // n8n webhooks
+  n8n: {
+    dbWebhook:             'https://teamqs.app.n8n.cloud/webhook/billing-processor-db',
+    confluenceCheckWebhook:'https://teamqs.app.n8n.cloud/webhook/billing-rules-check',
+  },
+  // Confluence page references (used by n8n webhook, kept here for link display)
+  confluence: {
+    rules: { url:'https://teamqs.atlassian.net/wiki/spaces/finance/pages/1627095047', knownVersion:7  },
+    sop:   { url:'https://teamqs.atlassian.net/wiki/spaces/finance/pages/694386707',  knownVersion:63 },
+  },
+};
+
+// ── MSAL AUTH ─────────────────────────────────────────────────────────────
+let _msalApp = null;
+function getMsalApp() {
+  if (_msalApp) return _msalApp;
+  if (typeof msal === 'undefined') throw new Error('MSAL library not loaded');
+  _msalApp = new msal.PublicClientApplication({
+    auth: {
+      clientId:    CONFIG.msal.clientId,
+      authority:   `https://login.microsoftonline.com/${CONFIG.msal.tenantId}`,
+      redirectUri: CONFIG.msal.redirectUri,
+    },
+    cache: { cacheLocation: 'sessionStorage' },
+  });
+  return _msalApp;
+}
+
+async function getGraphToken() {
+  const app = getMsalApp();
+  const accounts = app.getAllAccounts();
+  const req = { scopes: CONFIG.msal.scopes, account: accounts[0] };
+  try {
+    if (accounts.length > 0) {
+      const result = await app.acquireTokenSilent(req);
+      return result.accessToken;
+    }
+  } catch (e) { /* fall through to popup */ }
+  const result = await app.acquireTokenPopup({ scopes: CONFIG.msal.scopes });
+  return result.accessToken;
+}
+
+// ── CONFLUENCE RULES CHECK (via n8n) ─────────────────────────────────────
+async function checkConfluenceRules(){
+  const { confluence, n8n } = CONFIG;
+  const banner = document.getElementById('rulesBanner');
+  const status = document.getElementById('rulesStatus');
+  status.innerHTML = '<span style="opacity:.5">⏳ Checking Confluence...</span>';
+  try {
+    const resp = await fetch(n8n.confluenceCheckWebhook, { method: 'GET' });
+    if (!resp.ok) throw new Error('n8n ' + resp.status);
+    const r = await resp.json();
+    // Expected shape from n8n: { rules:{version,changed,summary}, sop:{version,changed,summary} }
+    if (r.rules?.changed || r.sop?.changed) {
+      banner.style.background = '#3d2000'; banner.style.borderBottom = '1px solid #7a4500';
+      status.innerHTML = `<span style="font-size:14px">⚠️</span><span style="color:#f5c97a;font-weight:600">Billing rules updated — review before running</span><span style="color:#666;margin:0 8px">·</span>${r.rules?.changed ? `<a href="${confluence.rules.url}" target="_blank" style="color:#f5c97a;font-size:11px">📋 Rules v${r.rules.version}: ${r.rules.summary} ↗</a>` : ''}${r.sop?.changed ? `<a href="${confluence.sop.url}" target="_blank" style="color:#f5c97a;font-size:11px;margin-left:8px">📄 SOP v${r.sop.version}: ${r.sop.summary} ↗</a>` : ''}`;
+    } else {
+      const rv = r.rules?.version || confluence.rules.knownVersion;
+      const sv = r.sop?.version   || confluence.sop.knownVersion;
+      banner.style.background = '#0d1f14'; banner.style.borderBottom = '1px solid #1a3a22';
+      status.innerHTML = `<span style="color:#5cb87a;font-weight:500">✓ Billing rules current</span><span style="color:#555;margin:0 8px">·</span><a href="${confluence.rules.url}" target="_blank" style="color:#7ec8a0;font-family:'DM Mono',monospace;font-size:11px;text-decoration:none">📋 Rules v${rv} ↗</a><span style="color:#555;margin:0 8px">·</span><a href="${confluence.sop.url}" target="_blank" style="color:#7ec8a0;font-family:'DM Mono',monospace;font-size:11px;text-decoration:none">📄 SOP v${sv} ↗</a>`;
+    }
+  } catch(err) {
+    banner.style.background = '#1a1714';
+    status.innerHTML = `<span style="color:#888">⚠ Could not verify rules — check manually</span><span style="color:#444;margin:0 8px">·</span><a href="${confluence.rules.url}" target="_blank" style="color:#666;font-family:'DM Mono',monospace;font-size:11px">Billing Rules ↗</a><a href="${confluence.sop.url}" target="_blank" style="color:#666;font-family:'DM Mono',monospace;font-size:11px;margin-left:8px">SOP ↗</a>`;
+  }
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+  checkReadiness();
+  checkConfluenceRules();
+  // Pre-load DB with the default period dates so it's ready when Analyze is clicked
+  const pStart=document.getElementById('pStart').value;
+  const pEnd=document.getElementById('pEnd').value;
+  if(pStart&&pEnd) loadDBData(pStart,pEnd);
+});
+
+
+</script>
+</body>
+</html>
