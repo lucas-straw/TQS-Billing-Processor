@@ -264,6 +264,9 @@ let DB={
   connected:false, loading:false,
   shutdownRows:[],       // raw rows: {id,locationCode,startTime,endTime,reason,psaId,psaAgreement,psaAgreementNumber}
   agreementMap:{},       // agreementNumber→{locationCode,priceType,flatRateFrequency,rate,startTime,endTime,contractEntity}
+  flatRateMap:{},        // sageLocationCode → [pricedAgreement, ...] (Flat Rate + Monthly Pricing)
+  contractedMap:{},      // sageLocationCode → [contractedAgreement, ...] (Contracted Units / Legacy CU)
+  invoiceSettings:{},    // accountNumber → 'Normal' | 'Days The Plant Is Open'
   marelliFlatZeroSAs:new Set(),
   loadedForPeriod:null
 };
@@ -305,6 +308,14 @@ async function loadDBData(pStart, pEnd){
       if(!DB.flatRateMap[a.sageLocationCode]) DB.flatRateMap[a.sageLocationCode]=[];
       DB.flatRateMap[a.sageLocationCode].push(a);
     });
+    // contractedAgreements: Legacy (Contracted Units) — Items A/B/C
+    // Same pattern: arrays per sageLocationCode for multi-agreement locations
+    DB.contractedMap={};
+    (result.contractedAgreements||[]).forEach(a=>{
+      if(!a.sageLocationCode)return;
+      if(!DB.contractedMap[a.sageLocationCode]) DB.contractedMap[a.sageLocationCode]=[];
+      DB.contractedMap[a.sageLocationCode].push(a);
+    });
     // invoiceSettings: accountNumber → 'Normal' | 'Days The Plant Is Open'
     DB.invoiceSettings=result.invoiceSettings||{};
 
@@ -312,8 +323,9 @@ async function loadDBData(pStart, pEnd){
     DB.loadedForPeriod=pStart+':'+pEnd;
     const sdCnt=new Set(DB.shutdownRows.map(r=>r.id)).size;
     const frCnt=Object.keys(DB.flatRateMap).length;
+    const cuCnt=Object.keys(DB.contractedMap).length;
     const mCnt=DB.marelliFlatZeroSAs.size;
-    setDBStatus('ok','✅ DB connected — '+sdCnt+' shutdown'+(sdCnt!==1?'s':'')+' · '+frCnt+' flat-rate locations · '+mCnt+' Marelli codes');
+    setDBStatus('ok','✅ DB connected — '+sdCnt+' shutdown'+(sdCnt!==1?'s':'')+' · '+frCnt+' flat-rate · '+cuCnt+' contracted-units · '+mCnt+' Marelli');
     checkReadiness();
   }catch(err){
     DB.loading=false; DB.connected=false;
@@ -475,6 +487,11 @@ function analyze(){
 
 function _doAnalyze(pStart,pEnd,iABC,gABC){
 
+  // Cross-file invoice-row index for the agreement-coverage check.
+  // Built during the row pass below; consumed after the four-file loop.
+  const cuInvoiceBySA={};   // sageLocationCode → [{key,sName,hdr,row,i,qty,price,cust}, ...] (1001 rows in A/B/C)
+  const mpFrInvoiceBySA={}; // sageLocationCode → [{key,sName,hdr,row,i,qty,price,cust,desc}, ...] (1005 non-shutdown + Monthly Pricing rows in D)
+
   ['A','B','C','D'].forEach(key=>{
     if(!WB[key])return;
     const isD=key==='D';
@@ -519,6 +536,16 @@ function _doAnalyze(pStart,pEnd,iABC,gABC){
         if(itemId==='1005'&&!desc.includes('Shutdown'))g.flatRows.push({i,row,sa,desc,qty,price});
         if(desc.includes('Shutdown Credit'))g.shutdownRows.push({i,row,sa,desc,qty,price});
         if(desc.includes('Monthly Pricing'))g.mpRows.push({i,row,sa,desc,qty,price});
+
+        // Cross-file index for agreement-coverage check
+        if(sa){
+          if((key==='A'||key==='B'||key==='C')&&itemId==='1001'){
+            (cuInvoiceBySA[sa]=cuInvoiceBySA[sa]||[]).push({key,sName,hdr,row:[...row],i,qty,price,cust});
+          }
+          if(key==='D'&&((itemId==='1005'&&!desc.includes('Shutdown'))||desc.includes('Monthly Pricing'))){
+            (mpFrInvoiceBySA[sa]=mpFrInvoiceBySA[sa]||[]).push({key,sName,hdr,row:[...row],i,qty,price,cust,desc});
+          }
+        }
 
         // ── DATE CHANGES ──
         if(hasDate){
@@ -609,9 +636,12 @@ function _doAnalyze(pStart,pEnd,iABC,gABC){
         });
 
         // Monthly pricing proration — DB verified if connected
+        // (Mid-period coverage is now handled by the agreement-coverage check; this verifies
+        //  proration on rows where the monthly price was already partial. We no longer skip
+        //  full-priced rows here — that mid-period role moved to agreement-coverage.)
         g.mpRows.forEach(mr=>{
           const price=parseFloat(mr.row[cP])||0;
-          if(price%1===0||price<=0)return;
+          if(price<=0)return;
           const agmts=DB.connected?(DB.flatRateMap[mr.sa]||[]):[];
             // Match by rate: find the agreement whose rate closest matches the billed amount
             // (before proration, the full rate is billed for full periods; for prorated rows
@@ -851,6 +881,185 @@ function _doAnalyze(pStart,pEnd,iABC,gABC){
     });
   });
 
+  // ── AGREEMENT COVERAGE (mid-period) — DB-driven, runs once across all files ──
+  // Catches agreements that start or end mid-period and verifies the prorated
+  // amount per the rules: MP = (active WD ÷ total WD) × rate · FR = weeks active
+  // (equivalent for monthly billing) · CU = partial-week math per affected week.
+  // Also flags mid-period agreements with no matching invoice row (sev: 'flag' —
+  // some agreements legitimately don't bill, so flag-for-review is the right verdict).
+  if(DB.connected){
+    const ps=new Date(pStart),pe=new Date(pEnd);
+    const insidePeriod=(d)=>{if(!d)return false;const x=new Date(d);return x>=ps&&x<=pe;};
+    const isMidPeriod=(a)=>{
+      const s=a.startTime?new Date(a.startTime):null;
+      const e=a.expireTime?new Date(a.expireTime):null;
+      const startMid=s&&s>ps&&s<=pe;
+      const endMid=e&&e>=ps&&e<pe;
+      return startMid||endMid;
+    };
+    const boundaryLabel=(a)=>{
+      const s=a.startTime?new Date(a.startTime):null;
+      const e=a.expireTime?new Date(a.expireTime):null;
+      const parts=[];
+      if(s&&s>ps&&s<=pe)parts.push(`starts ${a.startTime}`);
+      if(e&&e>=ps&&e<pe)parts.push(`ends ${a.expireTime}`);
+      return parts.join(' · ');
+    };
+    const matchByRate=(rows,rate,siblingCount)=>{
+      if(siblingCount<=1)return rows;
+      const exact=rows.filter(r=>r2(r.price)===r2(rate));
+      return exact.length?exact:rows;
+    };
+
+    // ─ Priced agreements (Monthly Pricing + Flat Rate, Item D) ─
+    Object.values(DB.flatRateMap).forEach(agmts=>{
+      agmts.forEach(agmt=>{
+        const sa=agmt.sageLocationCode;
+        if(!sa||!isMidPeriod(agmt))return;
+        if(DB.marelliFlatZeroSAs.has(sa))return;
+        const cust=agmt.accountNumber||'(unknown)';
+        const rate=parseFloat(agmt.rate)||0;
+        const freq=agmt.flatRateFrequency||'';
+        const aStart=agmt.startTime?new Date(agmt.startTime):ps;
+        const aEnd=agmt.expireTime?new Date(agmt.expireTime):pe;
+        const activeStart=new Date(Math.max(aStart,ps));
+        const activeEnd=new Date(Math.min(aEnd,pe));
+        const activeWD=countWeekdays(activeStart,activeEnd);
+        const periodDesc=`${activeStart.toISOString().slice(0,10)}→${activeEnd.toISOString().slice(0,10)}`;
+
+        // Math is well-defined for monthly billing (MP, FR-Monthly, FR with no freq).
+        // For Annual/Quarterly etc. the row already reflects a fraction of the
+        // agreement rate — flag for manual verification.
+        let expected=null,expectedDesc;
+        if(!freq||freq==='Monthly'){
+          expected=rate>0?r2((activeWD/totalWD())*rate):null;
+          expectedDesc=`(${activeWD}/${totalWD()} active WD) × $${rate} = $${expected}`;
+        } else {
+          expectedDesc=`Frequency: ${freq} · Rate: $${rate} · ${activeWD}/${totalWD()} active WD — verify manually`;
+        }
+
+        const candidates=mpFrInvoiceBySA[sa]||[];
+        const siblings=DB.flatRateMap[sa]||[];
+        const myRows=matchByRate(candidates,rate,siblings.length);
+
+        if(!myRows.length){
+          AUDIT.push({
+            id:mkId(),type:'agreement-coverage',sev:'flag',fileKey:'D',
+            sheet:'(no row)',custId:cust,sa,
+            desc:`Mid-period priced agreement — no matching Item D row (${boundaryLabel(agmt)})`,
+            calc:`Agreement ${agmt.agreementNumber} · ${agmt.priceType||freq||'Priced'} · Active ${periodDesc} · ${expectedDesc}`,
+            billed:0,calcAmt:expected,rowIdx:0,decision:null,
+            note:'Agreement is active mid-period in Qnet but no matching Item D row found. May be legitimately unbilled (zero-quantity, suppressed) — verify in Qnet.',
+            fix:'',fixRow:null,hdr:null
+          });
+          return;
+        }
+
+        const billedTotal=r2(myRows.reduce((s,r)=>s+(r.price||0),0));
+        const head=myRows[0];
+        if(expected===null){
+          AUDIT.push({
+            id:mkId(),type:'agreement-coverage',sev:'flag',
+            fileKey:head.key,sheet:head.sName,custId:cust,sa,
+            desc:`Mid-period priced agreement — manual verification needed (${boundaryLabel(agmt)})`,
+            calc:`Agreement ${agmt.agreementNumber} · Active ${periodDesc} · ${expectedDesc}`,
+            billed:billedTotal,calcAmt:null,rowIdx:head.i,decision:null,
+            note:'Frequency requires manual rate verification — confirm against the Qnet billing schedule.',
+            fix:'',fixRow:null,hdr:head.hdr
+          });
+        } else {
+          const sev=withinTol(billedTotal,expected)?'ok':'error';
+          const singleRow=myRows.length===1;
+          AUDIT.push({
+            id:mkId(),type:'agreement-coverage',sev,
+            fileKey:head.key,sheet:head.sName,custId:cust,sa,
+            desc:`Mid-period priced agreement — pro-ration ${sev==='ok'?'verified':'mismatch'} (${boundaryLabel(agmt)})`,
+            calc:`Agreement ${agmt.agreementNumber} · ${freq||'Monthly'} · Active ${periodDesc} · ${expectedDesc}`,
+            billed:billedTotal,calcAmt:expected,rowIdx:head.i,
+            decision:sev==='ok'?'accept':null,
+            note:sev==='error'?`Billed $${billedTotal}, expected $${expected} per mid-period proration.`:'Mid-period proration verified against Qnet DB',
+            fix:sev==='error'&&singleRow?`Change PRICE from ${billedTotal} to ${expected}`:'',
+            fixRow:sev==='error'&&singleRow?[...head.row]:null,hdr:head.hdr
+          });
+        }
+      });
+    });
+
+    // ─ Contracted Units agreements (Items A/B/C, 1001 rows) ─
+    Object.values(DB.contractedMap).forEach(agmts=>{
+      agmts.forEach(agmt=>{
+        const sa=agmt.sageLocationCode;
+        if(!sa||!isMidPeriod(agmt))return;
+        if(DB.marelliFlatZeroSAs.has(sa))return;
+        const cust=agmt.accountNumber||'(unknown)';
+        const rate=parseFloat(agmt.rate)||0;
+        const contractHours=parseFloat(agmt.contractHours)||0;
+        if(rate<=0||contractHours<=0)return; // unusable for math
+
+        const aStart=agmt.startTime?new Date(agmt.startTime):ps;
+        const aEnd=agmt.expireTime?new Date(agmt.expireTime):pe;
+        const activeStart=new Date(Math.max(aStart,ps));
+        const activeEnd=new Date(Math.min(aEnd,pe));
+
+        // invoiceSetting drives the formula difference between Normal (default)
+        // and "Days The Plant Is Open". For non-shutdown weeks both formulas
+        // converge to (daysActive/5) × contractHours × rate, so partial-week
+        // math is identical here — the divergence only matters in shutdown
+        // weeks, which the existing contracted-shutdown check already handles.
+        const invSetting=agmt.invoiceSetting||DB.invoiceSettings[cust]||'Normal';
+
+        // Sum expected billing over each Mon-Fri week the agreement is active.
+        let expected=0;
+        let mon=new Date(activeStart);
+        while(mon.getDay()!==1)mon.setDate(mon.getDate()-1);
+        while(mon<=activeEnd){
+          const fri=new Date(mon);fri.setDate(fri.getDate()+4);
+          const wkStart=new Date(Math.max(mon,activeStart));
+          const wkEnd=new Date(Math.min(fri,activeEnd));
+          if(wkStart<=wkEnd){
+            const daysActive=countWeekdays(wkStart,wkEnd);
+            expected+=(daysActive/5)*contractHours*rate;
+          }
+          mon.setDate(mon.getDate()+7);
+        }
+        expected=r2(expected);
+
+        const candidates=cuInvoiceBySA[sa]||[];
+        const siblings=DB.contractedMap[sa]||[];
+        const myRows=matchByRate(candidates,rate,siblings.length);
+        const periodDesc=`${activeStart.toISOString().slice(0,10)}→${activeEnd.toISOString().slice(0,10)}`;
+        const calcCore=`Agreement ${agmt.agreementNumber} · CU (${invSetting}) · ${contractHours} u × $${rate} · Active ${periodDesc}`;
+
+        if(!myRows.length){
+          AUDIT.push({
+            id:mkId(),type:'agreement-coverage',sev:'flag',fileKey:'A',
+            sheet:'(no row)',custId:cust,sa,
+            desc:`Mid-period CU agreement — no matching 1001 row (${boundaryLabel(agmt)})`,
+            calc:`${calcCore} · Expected total: $${expected}`,
+            billed:0,calcAmt:expected,rowIdx:0,decision:null,
+            note:'Contracted Units agreement is active mid-period in Qnet but no matching 1001 row found in Items A/B/C. May be legitimately unbilled — verify in Qnet.',
+            fix:'',fixRow:null,hdr:null
+          });
+          return;
+        }
+
+        const billedTotal=r2(myRows.reduce((s,r)=>s+((r.qty||0)*(r.price||0)),0));
+        const head=myRows[0];
+        const sev=withinTol(billedTotal,expected)?'ok':'error';
+        AUDIT.push({
+          id:mkId(),type:'agreement-coverage',sev,
+          fileKey:head.key,sheet:head.sName,custId:cust,sa,
+          desc:`Mid-period CU agreement — partial-week ${sev==='ok'?'verified':'mismatch'} (${boundaryLabel(agmt)})`,
+          calc:`${calcCore} · Expected total: $${expected} across ${myRows.length} 1001 row${myRows.length!==1?'s':''}`,
+          billed:billedTotal,calcAmt:expected,rowIdx:head.i,
+          decision:sev==='ok'?'accept':null,
+          note:sev==='error'?`Billed $${billedTotal} across CU rows, expected $${expected} per partial-week math.`:'Mid-period CU coverage verified against Qnet DB',
+          fix:'',fixRow:null,hdr:head.hdr
+        });
+      });
+    });
+  }
+
   renderDecisions();
   setStep(3);
 }
@@ -979,6 +1188,7 @@ function renderAuditDecisions(items){
     'missing-sa':{l:'Missing Agreement Codes',i:'🚨',d:'Billing rows with no SA code — Sage requires this to post correctly.'},
       'no-addl-hrs':{l:'Additional Hours — Should Not Be Billed',i:'🔀',d:'N.S. International (C10412) additional hours (1002 rows) should not be billed. Per SOP, these should be removed or charged to New Sabina Industries (C10960).'},
       'contracted-shutdown':{l:'Contracted Units During Full-Week Shutdown',i:'🏭',d:'Contracted units billed during a full Mon-Fri shutdown week. Only flags Normal-setting customers — DB-verified.'},
+      'agreement-coverage':{l:'Mid-Period Agreement Coverage',i:'📐',d:'DB-verified: agreements that start or end inside the billing period. For Monthly Pricing / Flat Rate (Item D) verifies (active WD ÷ total WD) × rate. For Contracted Units (Items A/B/C) verifies the sum of weekly billings using partial-week math at the agreement boundary. Missing rows are flagged (not errored) since some agreements legitimately don\'t bill — verify each in Qnet.'},
     };
   const byType={};items.forEach(a=>{if(!byType[a.type])byType[a.type]=[];byType[a.type].push(a);});
   return`<div style="margin-bottom:12px">
@@ -1279,6 +1489,7 @@ function renderAuditReport(){
     'prorate':{l:'Monthly Pricing Pro-ration'},'wp':{l:'Weekend Production'},
     'missing-cust':{l:'Missing Customer Codes'},'missing-sa':{l:'Missing Agreement Codes'},
       'no-addl-hrs':{l:'Additional Hours — Should Not Be Billed'},'contracted-shutdown':{l:'Contracted Units During Shutdown'},
+      'agreement-coverage':{l:'Mid-Period Agreement Coverage'},
   };
   const byType={};AUDIT.forEach(a=>{if(!byType[a.type])byType[a.type]=[];byType[a.type].push(a);});
   const c=document.getElementById('s5');
