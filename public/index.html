@@ -194,26 +194,38 @@
 </div>
 <div class="wrap">
 <div class="card">
-  <div class="ch"><div class="cn">1</div><div class="ct">Establish Billing Dates &amp; Period</div><div class="cd">Set once — applies to all files</div></div>
+  <div class="ch"><div class="cn">1</div><div class="ct">Establish Billing Dates &amp; Period</div><div class="cd">Invoice dates auto-fill from cycle math · GL blank by default</div></div>
   <div class="cb">
     <div class="dg" style="margin-bottom:10px">
       <div class="ds">
-        <div class="dst">Items A, B, C — By Week / Totaled / Pre-Bill</div>
-        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iABC" onchange="checkReadiness()"/></div>
-        <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gABC" onchange="checkReadiness()"/><div class="hint">Month close date</div></div>
+        <div class="dst">Item A — Monthly By Week</div>
+        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iA" onchange="checkReadiness()"/></div>
+        <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gA" onchange="checkReadiness()"/></div>
+      </div>
+      <div class="ds">
+        <div class="dst">Item B — Monthly Totaled</div>
+        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iB" onchange="checkReadiness()"/></div>
+        <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gB" onchange="checkReadiness()"/></div>
+      </div>
+    </div>
+    <div class="dg" style="margin-bottom:10px">
+      <div class="ds">
+        <div class="dst">Item C — Pre-Billing AH/WP</div>
+        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iC" onchange="checkReadiness()"/></div>
+        <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gC" onchange="checkReadiness()"/></div>
       </div>
       <div class="ds">
         <div class="dst">Item D — Flat Rate</div>
-        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iD" onchange="checkReadiness()"/><div class="hint">Previous month's Friday</div></div>
+        <div class="f"><label>Invoice Date (Col C)</label><input type="date" id="iD" onchange="checkReadiness()"/></div>
         <div class="f"><label>GL Posting Date (Col D)</label><input type="date" id="gD" onchange="checkReadiness()"/></div>
       </div>
     </div>
     <div class="dg">
       <div class="ds">
         <div class="dst">Billing Period</div>
-        <div class="f"><label>Period Start</label><input type="date" id="pStart" onchange="checkReadiness()" value="2026-02-23" onchange="onPeriodChange()"/></div>
-        <div class="f"><label>Period End</label><input type="date" id="pEnd" onchange="checkReadiness()" value="2026-03-29" onchange="onPeriodChange()"/></div>
-        <div class="f"><label>Total Weekdays in Period</label><input type="number" id="totalWD" value="27" min="1" max="31"/><div class="hint">Mon–Fri count</div></div>
+        <div class="f"><label>Period Start</label><input type="date" id="pStart" onchange="onPeriodChange()"/></div>
+        <div class="f"><label>Period End</label><input type="date" id="pEnd" onchange="onPeriodChange()"/></div>
+        <div class="f"><label>Total Weekdays in Period</label><input type="number" id="totalWD" min="1" max="31"/><div class="hint">Mon–Fri count</div></div>
       </div>
       <div class="ds">
         <div class="dst">Database &amp; Audit Settings</div>
@@ -279,8 +291,18 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.4.0';
 const CHANGELOG=[
+  {
+    version:'1.4.0',
+    date:'2026-04-28',
+    changes:[
+      'Test-account blocking now propagates per row. Previously the <code>#</code> was only stamped on the customer header row, leaving inherited rows unblocked (April E100: <code>WCBUT</code> $2,100 and <code>test1</code> $3,580 leaked through). The block now uses the carried-forward customer and is case-insensitive on both sides — auto-approved since this is a hard rule, not a judgment call.',
+      'Per-item date inputs: each Item (A/B/C/D) gets its own Invoice + GL Posting Date pair (<code>iA/gA</code>, <code>iB/gB</code>, <code>iC/gC</code>, <code>iD/gD</code>). The combined <code>iABC/gABC</code> inputs are gone.',
+      'Invoice dates auto-fill on page load from the billing cycle math: cycle start = Mon after last Sun of prior month · cycle end = last Sun of current month being billed · invoice default = first Fri ≥ cycle start. Period Start, Period End, and Total Weekdays auto-fill from the same logic; GL dates stay blank for manual entry.',
+      'Fixed a stale <code>onchange</code> attribute on Period Start / End — the second <code>onchange</code> was being shadowed, so <code>onPeriodChange()</code> never fired on date changes.'
+    ]
+  },
   {
     version:'1.3.0',
     date:'2026-04-27',
@@ -487,6 +509,41 @@ const bent=(s)=>{const b=new Date(s);b.setMonth(b.getMonth()+1);b.setDate(1);con
 const r2=(n)=>Math.round(n*100)/100;
 const tol=()=>parseFloat(document.getElementById('tol').value)||1;
 const totalWD=()=>parseInt(document.getElementById('totalWD').value)||27;
+
+// Returns the last Sunday of the given month (0-indexed month).
+function lastSundayOfMonth(year,month){
+  const last=new Date(year,month+1,0); // last day of month
+  return new Date(year,month,last.getDate()-last.getDay());
+}
+
+// Computes the billing cycle dates from a reference date (defaults to today).
+// Cycle start = Mon after last Sun of prior calendar month
+// Cycle end   = last Sun of current calendar month
+// Invoice default = first Fri on or after cycle start
+// Calendar-month rule: stay on this month's cycle through end-of-month, even
+// after the last Sunday passes (matches the team's actual invoicing workflow
+// — accountants finish the cycle in the days after Sunday but before the
+// next month begins). Roll over only on the 1st of next month.
+function computeBillingCycle(today=new Date()){
+  const y=today.getFullYear(),m=today.getMonth();
+  const cycleEnd=lastSundayOfMonth(y,m);
+  const priorMonth=m===0?11:m-1;
+  const priorYear=m===0?y-1:y;
+  const cycleStart=new Date(lastSundayOfMonth(priorYear,priorMonth));
+  cycleStart.setDate(cycleStart.getDate()+1);
+  const invoiceDefault=new Date(cycleStart);
+  while(invoiceDefault.getDay()!==5)invoiceDefault.setDate(invoiceDefault.getDate()+1);
+  let weekdays=0;
+  const cur=new Date(cycleStart);
+  while(cur<=cycleEnd){
+    const d=cur.getDay();
+    if(d!==0&&d!==6)weekdays++;
+    cur.setDate(cur.getDate()+1);
+  }
+  // Local-date YYYY-MM-DD for <input type="date"> — never use toISOString (UTC shift).
+  const iso=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return{cycleStart:iso(cycleStart),cycleEnd:iso(cycleEnd),invoiceDefault:iso(invoiceDefault),weekdays};
+}
 function withinTol(b,c){if(c===0&&b===0)return true;if(c===0)return false;return Math.abs((b-c)/c)*100<=tol();}
 function countWeekdays(start,end){let d=new Date(start),count=0;const e=new Date(end);while(d<=e){const wd=d.getDay();if(wd!==0&&wd!==6)count++;d.setDate(d.getDate()+1);}return count;}
 
@@ -508,20 +565,24 @@ const CUST_NAMES={'C10916':'Standard Profil Mexico','C10897':'Standard Profil Bu
 
 // ── ANALYZE ───────────────────────────────────────────────────────────────
 function checkReadiness(){
-  const iABC=document.getElementById('iABC').value;
-  const gABC=document.getElementById('gABC').value;
   const pStart=document.getElementById('pStart').value;
   const pEnd=document.getElementById('pEnd').value;
-  const hasFile=Object.values(WB).some(w=>w);
   const btn=document.getElementById('analyzeBtn');
   const note=document.getElementById('analyzeNote');
   if(!btn)return;
 
   const missing=[];
-  if(!iABC) missing.push('Invoice Date (Items A/B/C)');
-  if(!gABC) missing.push('GL Date (Items A/B/C)');
   if(!pStart||!pEnd) missing.push('Billing Period dates');
-  if(!hasFile) missing.push('at least one file');
+
+  // Each uploaded item must have at least its invoice date set. GL is optional.
+  const itemsMissingDate=[];
+  ['A','B','C','D'].forEach(k=>{
+    if(WB[k]&&!document.getElementById('i'+k).value)
+      itemsMissingDate.push(`Item ${k} invoice date`);
+  });
+  if(itemsMissingDate.length) missing.push(...itemsMissingDate);
+
+  if(!Object.values(WB).some(w=>w)) missing.push('at least one file');
 
   if(missing.length===0){
     btn.disabled=false;
@@ -533,8 +594,6 @@ function checkReadiness(){
 }
 
 function analyze(){
-  const iABC=document.getElementById('iABC').value;
-  const gABC=document.getElementById('gABC').value;
   const pStart=document.getElementById('pStart').value;
   const pEnd=document.getElementById('pEnd').value;
 
@@ -549,7 +608,7 @@ function analyze(){
   const runAnalysis=()=>{
     if(note) note.textContent='';
     if(btn) btn.disabled=false;
-    _doAnalyze(pStart,pEnd,iABC,gABC);
+    _doAnalyze(pStart,pEnd);
   };
 
   if(!DB.connected||DB.loadedForPeriod!==pStart+':'+pEnd){
@@ -561,7 +620,7 @@ function analyze(){
   }
 }
 
-function _doAnalyze(pStart,pEnd,iABC,gABC){
+function _doAnalyze(pStart,pEnd){
 
   // Cross-file invoice-row index for the agreement-coverage check.
   // Built during the row pass below; consumed after the four-file loop.
@@ -571,11 +630,10 @@ function _doAnalyze(pStart,pEnd,iABC,gABC){
 
   ['A','B','C','D'].forEach(key=>{
     if(!WB[key])return;
-    const isD=key==='D';
-    const stdInv=fmt(isD?(document.getElementById('iD').value||iABC):iABC);
-    const stdGl=fmt(isD?(document.getElementById('gD').value||gABC):gABC);
-    const baseI=isD?(document.getElementById('iD').value||iABC):iABC;
-    const baseG=isD?(document.getElementById('gD').value||gABC):gABC;
+    const baseI=document.getElementById('i'+key).value;
+    const baseG=document.getElementById('g'+key).value;
+    const stdInv=fmt(baseI);
+    const stdGl=fmt(baseG);
 
     WB[key].SheetNames.forEach(sName=>{
       const ws=WB[key].Sheets[sName];
@@ -640,10 +698,13 @@ function _doAnalyze(pStart,pEnd,iABC,gABC){
         }
 
         // ── STRUCTURAL RULES ──
-        if(key==='A'&&sName==='E100'&&row[cF]){
-          const cid2=String(row[cF]).trim().toUpperCase();
-          if(cid2==='WCBUT'||cid2==='TEST1')
-            CHANGES.push({id:mkId(),type:'block',fileKey:key,sheet:sName,custId:cid2,before:'(empty)',after:'#',reason:'Test account — block Sage import',approved:null,rowIdx:i});
+        // Test-account blocking: use the carried-forward `cust` so subsequent
+        // rows (with blank CUSTOMER_ID) inherit and get blocked too. Auto-approved
+        // since this is a hard rule, not a judgment call.
+        if(key==='A'&&sName==='E100'){
+          const custUpper=(cust||'').trim().toUpperCase();
+          if(custUpper==='WCBUT'||custUpper==='TEST1')
+            CHANGES.push({id:mkId(),type:'block',fileKey:key,sheet:sName,custId:custUpper,before:'(empty)',after:'#',reason:'Test account — block Sage import',approved:true,rowIdx:i});
         }
         if(cust==='C10763'&&itemId==='1002')
           CHANGES.push({id:mkId(),type:'split',fileKey:key,sheet:sName,custId:'C10763',before:'1002 row on main invoice',after:'Moved to new "Rework" invoice',reason:'LG Electronics: additional hours separate invoice',approved:null,rowIdx:i});
@@ -1468,19 +1529,14 @@ function undoCodeFix(auditId,type){const a=AUDIT.find(x=>x.id===auditId);if(a){a
 
 // ── GENERATE ──────────────────────────────────────────────────────────────
 function generate(){
-  const iABC=document.getElementById('iABC').value;
-  const gABC=document.getElementById('gABC').value;
-  const iD=document.getElementById('iD').value;
-  const gD=document.getElementById('gD').value;
   CSV_DATA={}; LOG=[];
 
   ['A','B','C','D'].forEach(key=>{
     if(!WB[key])return;
-    const isD=key==='D';
-    const stdInv=fmt(isD?(iD||iABC):iABC);
-    const stdGl=fmt(isD?(gD||gABC):gABC);
-    const baseI=isD?(iD||iABC):iABC;
-    const baseG=isD?(gD||gABC):gABC;
+    const baseI=document.getElementById('i'+key).value;
+    const baseG=document.getElementById('g'+key).value;
+    const stdInv=fmt(baseI);
+    const stdGl=fmt(baseG);
     CSV_DATA[key]={};
 
     WB[key].SheetNames.forEach(sName=>{
@@ -1554,12 +1610,13 @@ function generate(){
           nr[cC]=tI;nr[cD_]=tG;dateRowsUpdated++;
         }
 
-        // Block test accounts
+        // Block test accounts — use carried-forward `cust`, case-insensitive,
+        // so every row inherits the block (not just the customer header row).
         if(key==='A'&&sName==='E100'){
-          const cid2=String(row[cF]||'').trim().toUpperCase();
-          if(cid2==='WCBUT'||cid2==='TEST1'){
-            const chg=CHANGES.find(c=>c.type==='block'&&c.custId===cid2&&c.fileKey===key);
-            if(!chg||chg.approved!==false){nr[0]='#';LOG.push(`<span class="al-warn">  # Blocked ${cid2} in E100</span>`);}
+          const custUpper=(cust||'').trim().toUpperCase();
+          if(custUpper==='WCBUT'||custUpper==='TEST1'){
+            const denied=CHANGES.some(c=>c.type==='block'&&c.custId===custUpper&&c.fileKey===key&&c.rowIdx===i&&c.approved===false);
+            if(!denied){nr[0]='#';LOG.push(`<span class="al-warn">  # Blocked ${custUpper} row ${i} in E100</span>`);}
           }
         }
 
@@ -1882,12 +1939,29 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('DOMContentLoaded',()=>{
   const vb=document.getElementById('verBtn');
   if(vb)vb.textContent='v'+APP_VERSION+' · Changelog';
+
+  // Pre-fill billing cycle from today's date.
+  // Cycle start = Mon after last Sun of prior month
+  // Cycle end   = last Sun of current month being billed
+  // Invoice default = first Fri ≥ cycle start (applied to all four items)
+  // GL dates intentionally left blank — Lucas fills manually.
+  const cycle=computeBillingCycle();
+  document.getElementById('pStart').value=cycle.cycleStart;
+  document.getElementById('pEnd').value=cycle.cycleEnd;
+  document.getElementById('totalWD').value=cycle.weekdays;
+  ['iA','iB','iC','iD'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value=cycle.invoiceDefault;
+  });
+
+  // Default amount tolerance if not preset
+  const tolEl=document.getElementById('tol');
+  if(tolEl&&!tolEl.value)tolEl.value='1';
+
   checkReadiness();
   checkConfluenceRules();
-  // Pre-load DB with the default period dates so it's ready when Analyze is clicked
-  const pStart=document.getElementById('pStart').value;
-  const pEnd=document.getElementById('pEnd').value;
-  if(pStart&&pEnd) loadDBData(pStart,pEnd);
+  // Pre-load DB with the cycle dates so it's ready when Analyze is clicked
+  if(cycle.cycleStart&&cycle.cycleEnd) loadDBData(cycle.cycleStart,cycle.cycleEnd);
 });
 
 
