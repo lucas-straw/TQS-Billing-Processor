@@ -375,8 +375,17 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.1';
+const APP_VERSION='1.7.2';
 const CHANGELOG=[
+  {
+    version:'1.7.2',
+    date:'2026-04-29',
+    changes:[
+      'Reconciliation Step 3: each retro row now shows much more context — the original ITEMDESC from the prior pre-bill, the original MEMO, the count of prior rows that summed to the billed total, and the source sheet (E100, E200, etc.).',
+      'When a billed row has no matching expected billing in DB_PRIOR, the row now shows a specific diagnostic instead of the generic "no matching agreement" message: the agreement number extracted from MEMO + its expiration date, or whether the SA exists in DB but with a different price type, or whether the SA isn\'t in DB at all.',
+      'Adds <code>priceType</code> to the row metadata so reviewers can see at a glance whether the agreement is Contracted Units, Monthly Pricing, or Flat Rate.'
+    ]
+  },
   {
     version:'1.7.1',
     date:'2026-04-29',
@@ -2559,16 +2568,65 @@ function buildRetroAdjustments(priorStart){
       const expectedAmt=exp&&exp.amount!=null?exp.amount:0;
       const retroAmount=r2(expectedAmt-billed.amount);
       if(Math.abs(retroAmount)<0.01)return;
+
+      // Enrich with prior-row context for the reviewer.
+      const billedRows=billed.rows||[];
+      const firstRow=billedRows[0];
+      const originalDesc=firstRow?firstRow.desc:'';
+      const sampleMemo=firstRow?firstRow.memo:'';
+      const billedSheet=firstRow?firstRow.sName:'';
+
+      // Try to identify the agreement for diagnostics.
+      let agreementNumber=exp&&exp.agreementNumber||'';
+      let inferredAgmt=exp&&exp.agreement;
+      let priceType=inferredAgmt?(inferredAgmt.priceType||''):'';
+      if(!agreementNumber&&sampleMemo){
+        const matches=String(sampleMemo).match(/\d{3,}/g);
+        if(matches){
+          for(const n of matches){
+            if(DB_PRIOR.agreementByNumber&&DB_PRIOR.agreementByNumber[n]){
+              agreementNumber=n;
+              inferredAgmt=DB_PRIOR.agreementByNumber[n];
+              priceType=inferredAgmt.priceType||'';
+              break;
+            }
+          }
+        }
+      }
+
+      // Diagnostic note when expected is missing — explain what we found in DB_PRIOR.
+      let diagnosticNote='';
+      if(!exp||exp.amount==null){
+        if(inferredAgmt){
+          if(inferredAgmt.expireTime)diagnosticNote=`Agreement R${agreementNumber} (${priceType||'?'}) — expired ${inferredAgmt.expireTime}.`;
+          else diagnosticNote=`Agreement R${agreementNumber} (${priceType||'?'}) — active in DB but no expected billing for ${type}. Likely a price-type mismatch (e.g. agreement is ${priceType}, billed row is ${type}).`;
+        } else if(agreementNumber){
+          diagnosticNote=`Agreement R${agreementNumber} not found in DB for prior period — may have been deleted or the period dates don't include it.`;
+        } else {
+          const cuList=(DB_PRIOR.contractedMap||{})[sa]||[];
+          const prList=(DB_PRIOR.flatRateMap||{})[sa]||[];
+          if(!cuList.length&&!prList.length){
+            diagnosticNote=`SA ${sa} has no agreements in DB_PRIOR for this period.`;
+          } else {
+            const parts=[];
+            if(cuList.length)parts.push(cuList.length+' CU agreement'+(cuList.length!==1?'s':''));
+            if(prList.length)parts.push(prList.length+' priced agreement'+(prList.length!==1?'s':''));
+            diagnosticNote=`SA ${sa} has ${parts.join(' + ')} in DB but none match this billed type (no agreement number in MEMO to disambiguate).`;
+          }
+        }
+      }
+
       out.push({
         id:'retro-'+(++cid),custId:cust,sa,type,
         itemId:exp&&exp.itemId||(type==='contracted-units'?'1001':'1005'),
         billed:billed.amount,expected:expectedAmt,retroAmount,
         decision:null,fixedAmount:null,
-        agreement:exp&&exp.agreement,agreementNumber:exp&&exp.agreementNumber||'',
-        originalMemo:billed.memo,
+        agreement:inferredAgmt,agreementNumber,priceType,
+        originalMemo:billed.memo,sampleMemo,originalDesc,
+        billedRowCount:billedRows.length,billedSheet,
         desc:({'contracted-units':'Contracted Units','monthly-pricing':'Monthly Pricing','flat-rate':'Flat Rate','shutdown-credit':'Shutdown Credit','additional-hours':'Additional Hours','weekend-production':'Weekend Production'})[type],
-        calc:exp&&exp.calc||`No expected billing in prior period · billed $${billed.amount}`,
-        note:exp?'':'Customer was billed but no matching agreement found in DB_PRIOR — may have ended.'
+        calc:exp&&exp.calc||`No matching expected billing for ${type} in prior period · billed $${billed.amount} across ${billedRows.length} row${billedRows.length!==1?'s':''}`,
+        note:diagnosticNote||(exp?'':'Customer was billed but no matching agreement found in DB_PRIOR — may have ended.')
       });
     });
   });
@@ -2634,15 +2692,19 @@ function renderReconStep3(custCount){
         <div class="chrow hrow"><div class="cc">Customer / SA</div><div class="cc">Calc</div><div class="cc">Billed → Expected · Retro</div><div class="cc">Action</div></div>
         ${items.map(a=>{
           const sign=a.retroAmount>=0?'+':'';
+          const escapeHtml=(s)=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch]);
           return`<div class="chrow" id="rac-${a.id}">
             <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
               <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--red)">${a.custId}</span>
-              <span style="font-size:10px;color:var(--t3)">${a.sa}</span>
-              <span style="font-size:10px;color:var(--t3)">${a.agreementNumber?'R'+a.agreementNumber:''}</span>
+              <span style="font-size:10px;color:var(--t3)">${a.sa}${a.billedSheet?' · '+a.billedSheet:''}</span>
+              ${a.agreementNumber?`<span style="font-size:10px;color:var(--t3)">R${a.agreementNumber}${a.priceType?' · '+escapeHtml(a.priceType):''}</span>`:''}
+              ${a.billedRowCount?`<span style="font-size:10px;color:var(--t3)">${a.billedRowCount} prior row${a.billedRowCount!==1?'s':''}</span>`:''}
             </div>
             <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
-              <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${a.calc}</span>
-              ${a.note?`<span style="font-size:10px;color:var(--amber);font-style:italic">${a.note}</span>`:''}
+              <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${escapeHtml(a.calc)}</span>
+              ${a.originalDesc?`<span style="font-size:10px;color:var(--t3);font-style:italic">Prior desc: ${escapeHtml(a.originalDesc)}</span>`:''}
+              ${a.sampleMemo?`<span style="font-size:10px;color:var(--t3);font-family:'DM Mono',monospace;word-break:break-word">${escapeHtml(a.sampleMemo)}</span>`:''}
+              ${a.note?`<span style="font-size:10px;color:var(--amber);font-style:italic">${escapeHtml(a.note)}</span>`:''}
             </div>
             <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px;font-family:'DM Mono',monospace;font-size:11px">
               <span>$${a.billed} → $${a.expected}</span>
