@@ -375,8 +375,15 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.7.1';
 const CHANGELOG=[
+  {
+    version:'1.7.1',
+    date:'2026-04-29',
+    changes:[
+      'Hotfix: Pre-Bill Reconciliation now correctly scopes retros to <b>pre-bill customers only</b> (those appearing in the prior pre-bill file). The v1.6.0 release was iterating the union of billed and expected (cust × SA) keys, which generated phantom retros for every priced / flat-rate agreement in the DB — typically hundreds of false-positive "expected $X, billed $0" rows for customers who were never on the pre-bill in the first place. Per spec section 3.1, pre-bill customers are defined by the prior file alone.'
+    ]
+  },
   {
     version:'1.7.0',
     date:'2026-04-28',
@@ -2534,13 +2541,15 @@ function getBilledTotal(snap,cust,sa,type){
 }
 
 // Diffs expected vs billed and produces retro adjustment entries. |delta|<$0.01 = match.
+// Pre-bill customers = those who appear in the prior pre-bill file (per spec 3.1).
+// We iterate ONLY billed (cust × SA) keys — agreements that were never on the
+// pre-bill (typical case: priced/flat-rate customers who bill end-of-month) must
+// not generate retros, even if their expected billing is non-zero in DB_PRIOR.
 function buildRetroAdjustments(priorStart){
   const out=[];
   const types=['contracted-units','monthly-pricing','flat-rate','shutdown-credit','additional-hours','weekend-production'];
-  // Union of (cust,sa) keys across both snapshots
   const keys=new Set();
   Object.entries(RECON.billedSnapshot).forEach(([c,sas])=>Object.keys(sas).forEach(sa=>keys.add(c+'|'+sa)));
-  Object.entries(RECON.expectedSnapshot).forEach(([c,sas])=>Object.keys(sas).forEach(sa=>keys.add(c+'|'+sa)));
   keys.forEach(key=>{
     const[cust,sa]=key.split('|');
     if(DB_PRIOR.marelliFlatZeroSAs.has(sa))return;
