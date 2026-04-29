@@ -164,6 +164,14 @@
   .cl-date{font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-left:8px}
   .cl-list{margin-top:8px;padding-left:18px;font-size:12px;color:var(--text);line-height:1.55}
   .cl-list li{margin-bottom:4px}
+  /* Tab bar */
+  .tab-bar{background:var(--text);color:#fff;padding:0 32px;display:flex;gap:0;border-bottom:1px solid #333}
+  .tab-btn{background:none;border:none;color:#888;padding:11px 22px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:8px}
+  .tab-btn:hover{color:#ccc}
+  .tab-btn.active{color:#fff;border-bottom-color:var(--red)}
+  .tab-pane.hidden{display:none}
+  .recon-empty{background:var(--s2);border:1px dashed var(--bd);border-radius:8px;padding:30px 20px;text-align:center;font-size:13px;color:var(--t2)}
+  .recon-empty b{color:var(--text);font-weight:600}
 </style>
 </head>
 <body>
@@ -180,6 +188,11 @@
     <div class="cl-body" id="clBody"></div>
   </div>
 </div>
+<div class="tab-bar">
+  <button class="tab-btn active" data-tab="MonthEnd" onclick="switchTab('MonthEnd')">📋 Month-End Invoicing</button>
+  <button class="tab-btn" data-tab="Recon" onclick="switchTab('Recon')">🔁 Pre-Bill Reconciliation</button>
+</div>
+<div id="tabMonthEnd" class="tab-pane">
 <div class="steps" id="steps">
   <div class="stp active" id="st1"><div class="stp-n">1</div>Dates &amp; Period</div>
   <div class="stp" id="st2"><div class="stp-n">2</div>Upload Files</div>
@@ -288,11 +301,91 @@
 </div>
 <div id="s5" class="hidden"></div>
 </div>
+</div><!-- /#tabMonthEnd -->
+
+<div id="tabRecon" class="tab-pane hidden">
+<div class="steps" id="stepsRecon">
+  <div class="stp active" id="rst1"><div class="stp-n">1</div>Periods &amp; Dates</div>
+  <div class="stp" id="rst2"><div class="stp-n">2</div>Upload Files</div>
+  <div class="stp" id="rst3"><div class="stp-n">3</div>Review Retro Changes</div>
+  <div class="stp" id="rst4"><div class="stp-n">4</div>Generate &amp; Export</div>
+</div>
+<div class="wrap">
+  <div class="card">
+    <div class="ch"><div class="cn">1</div><div class="ct">Periods &amp; Dates</div><div class="cd">Prior period being reconciled · New pre-bill period being augmented</div></div>
+    <div class="cb">
+      <div class="dg" style="margin-bottom:10px">
+        <div class="ds">
+          <div class="dst">Prior Period (being reconciled)</div>
+          <div class="f"><label>Period Start</label><input type="date" id="rPriorStart" onchange="onReconPeriodChange()"/></div>
+          <div class="f"><label>Period End</label><input type="date" id="rPriorEnd" onchange="onReconPeriodChange()"/></div>
+          <div class="f"><label>Total Weekdays in Prior Period</label><input type="number" id="rPriorWD" min="1" max="31"/><div class="hint">Mon–Fri count</div></div>
+        </div>
+        <div class="ds">
+          <div class="dst">New Pre-Bill Period</div>
+          <div class="f"><label>Period Start</label><input type="date" id="rNewStart" onchange="onReconNewStartChange()"/></div>
+          <div class="f"><label>Period End</label><input type="date" id="rNewEnd" onchange="checkReconReadiness()"/></div>
+          <div class="f"><label>Invoice Date</label><input type="date" id="rNewInv" onchange="checkReconReadiness()"/><div class="hint">1st business day of new month</div></div>
+          <div class="f"><label>GL Posting Date</label><input type="date" id="rNewGL" onchange="checkReconReadiness()"/><div class="hint">1st of new month</div></div>
+        </div>
+      </div>
+      <div class="db-bar loading" id="rDbStatusBar"><span id="rDbStatusText">⏳ DB will be queried for the prior period when you click Reconcile</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="cn">2</div><div class="ct">Upload Pre-Bill Files</div><div class="cd">Both files in XLSX format · same export shape as Items A/B</div></div>
+    <div class="cb">
+      <div class="ug">
+        <label class="us" id="rsl-prior" ondragover="rdv(event,'prior')" ondragleave="rdl('prior')" ondrop="rdd(event,'prior')">
+          <div class="sl">PRIOR PRE-BILL</div>
+          <div class="si">📄</div>
+          <div class="sno" id="rsn-prior">Drop the saved pre-bill from prior month here, or click to browse</div>
+          <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'prior')"/>
+        </label>
+        <label class="us" id="rsl-new" ondragover="rdv(event,'new')" ondragleave="rdl('new')" ondrop="rdd(event,'new')">
+          <div class="sl">NEW PRE-BILL</div>
+          <div class="si">📄</div>
+          <div class="sno" id="rsn-new">Drop the freshly downloaded next-month pre-bill here, or click to browse</div>
+          <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'new')"/>
+        </label>
+      </div>
+      <div id="rfsum" style="margin-top:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--t2)"></div>
+      <div class="btn-row" style="margin-top:14px" id="r2act">
+        <button class="btn" id="reconBtn" disabled onclick="reconcile()">⚙ Reconcile Pre-Bills →</button>
+        <span id="reconNote" style="font-size:12px;color:var(--t2)"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="rs3" class="hidden"></div>
+  <div id="rs4" class="card hidden">
+    <div class="ch"><div class="cn">4</div><div class="ct">Generate &amp; Export Reconciled Pre-Bill</div></div>
+    <div class="cb">
+      <div id="rdlContent"></div>
+      <div class="btn-row" style="margin-top:11px">
+        <button class="btn btn-b" onclick="reconUploadAll()">☁ Upload to SharePoint (Pre-Invoices folder)</button>
+        <button class="btn btn-s" onclick="reconDownloadAll()">⬇ Download Augmented Pre-Bill CSV</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div><!-- /#tabRecon -->
+
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.5.0';
 const CHANGELOG=[
+  {
+    version:'1.5.0',
+    date:'2026-04-28',
+    changes:[
+      'New <b>Pre-Bill Reconciliation</b> tab (Phase 1: foundation). Tab switcher in the header, dedicated step indicator, period inputs (prior + new with auto-fill), two-slot file upload (prior pre-bill + new pre-bill), prior-period DB loader (separate <code>DB_PRIOR</code> state so it doesn\'t clobber the Month-End flow), and <code>billedSnapshot</code> builder that aggregates the prior pre-bill into a per-customer / per-SA / per-itemId snapshot.',
+      '<b>Phase 2 (v1.6.0)</b> — coming next: <code>expectedSnapshot</code> diff using shutdowns, contracted units, priced agreements, taxes, and volume discount. Step 3 review UI and Step 4 augmented-CSV generation.',
+      '<b>Phase 3 (v1.7.0)</b> — once n8n Queries 6 (weekend production) and 7 (additional hours) ship, AH/WP retros activate. The HTML is already wired to consume those payload fields and currently degrades silently when absent.'
+    ]
+  },
   {
     version:'1.4.0',
     date:'2026-04-28',
@@ -332,18 +425,40 @@ let cid=0; const mkId=()=>++cid;
 const CODE_FIXES={};
 
 // ── DB STATE ─────────────────────────────────────────────────────────────
-let DB={
-  connected:false, loading:false,
-  shutdownRows:[],       // raw rows: {id,locationCode,startTime,endTime,reason,psaId,psaAgreement,psaAgreementNumber}
-  agreementMap:{},       // agreementNumber→{locationCode,priceType,flatRateFrequency,rate,startTime,endTime,contractEntity}
-  flatRateMap:{},        // sageLocationCode → [pricedAgreement, ...] (Flat Rate + Monthly Pricing)
-  contractedMap:{},      // sageLocationCode → [contractedAgreement, ...] (Contracted Units / Legacy CU)
-  agreementByNumber:{},  // agreementNumber → agreement record (combined priced + contracted)
-  knownAgreementNumbers:new Set(), // for prefix-agnostic MEMO parsing
-  producingFacilities:{},// agreementNumber → [accountNumber, ...] (optional payload; absent = no auto-suggest)
-  invoiceSettings:{},    // accountNumber → 'Normal' | 'Days The Plant Is Open'
-  marelliFlatZeroSAs:new Set(),
-  loadedForPeriod:null
+function makeDBState(){
+  return{
+    connected:false, loading:false,
+    shutdownRows:[],
+    agreementMap:{},
+    flatRateMap:{},
+    contractedMap:{},
+    agreementByNumber:{},
+    knownAgreementNumbers:new Set(),
+    producingFacilities:{},
+    invoiceSettings:{},
+    marelliFlatZeroSAs:new Set(),
+    // New payload fields (Phase 3 will consume these for AH/WP retros).
+    // Absent until n8n Queries 6+7 ship — readers degrade gracefully.
+    weekendProductionBySA:{},
+    additionalHoursBySA:{},
+    loadedForPeriod:null
+  };
+}
+let DB=makeDBState();
+// DB_PRIOR holds the prior-period snapshot for the reconciliation tab so it
+// doesn't clobber the current-period DB state used by the Month-End flow.
+let DB_PRIOR=makeDBState();
+
+// Reconciliation tab state — parallel to the Month-End flow. Populated by
+// rlf() (file upload), reconcile() (build snapshots), and the retro CSV gen.
+const RECON={
+  priorPreBill:{wb:null,fn:''},
+  newPreBill:{wb:null,fn:''},
+  billedSnapshot:{},     // { custId: { sa: { byItem:{itemId:[{...}]}, totals:{...} } } }
+  expectedSnapshot:{},   // populated in Phase 2
+  retroAdjustments:[],   // populated in Phase 2
+  csvData:{},
+  log:[]
 };
 
 // ── DB LOAD ──────────────────────────────────────────────────────────────
@@ -356,6 +471,45 @@ function onPeriodChange(){
     DB.connected=false; DB.loadedForPeriod='';
     loadDBData(pStart,pEnd);
   }
+}
+
+// Populates a DB-shaped state object from a webhook response. Reused by the
+// Month-End loader (target=DB) and the reconciliation loader (target=DB_PRIOR).
+function populateDBFromResponse(target,result){
+  target.shutdownRows=result.shutdowns||[];
+  target.marelliFlatZeroSAs=new Set(result.marelliSuppressedSageCodes||[]);
+  target.flatRateMap={};
+  (result.pricedAgreements||[]).forEach(a=>{
+    if(!a.sageLocationCode)return;
+    (target.flatRateMap[a.sageLocationCode]=target.flatRateMap[a.sageLocationCode]||[]).push(a);
+  });
+  target.contractedMap={};
+  (result.contractedAgreements||[]).forEach(a=>{
+    if(!a.sageLocationCode)return;
+    (target.contractedMap[a.sageLocationCode]=target.contractedMap[a.sageLocationCode]||[]).push(a);
+  });
+  target.agreementByNumber={};
+  target.knownAgreementNumbers=new Set();
+  [...(result.pricedAgreements||[]),...(result.contractedAgreements||[])].forEach(a=>{
+    if(a.agreementNumber!=null){
+      const n=String(a.agreementNumber);
+      target.agreementByNumber[n]=a;
+      target.knownAgreementNumbers.add(n);
+    }
+  });
+  target.producingFacilities=result.agreementProducingFacilities||{};
+  target.invoiceSettings=result.invoiceSettings||{};
+  // Phase 3 fields — absent until n8n Queries 6+7 ship; readers must default to []/{}.
+  target.weekendProductionBySA={};
+  (result.weekendProduction||[]).forEach(wp=>{
+    if(!wp.sageLocationCode)return;
+    (target.weekendProductionBySA[wp.sageLocationCode]=target.weekendProductionBySA[wp.sageLocationCode]||[]).push(wp);
+  });
+  target.additionalHoursBySA={};
+  (result.additionalHours||[]).forEach(ah=>{
+    if(!ah.sageLocationCode)return;
+    (target.additionalHoursBySA[ah.sageLocationCode]=target.additionalHoursBySA[ah.sageLocationCode]||[]).push(ah);
+  });
 }
 
 async function loadDBData(pStart, pEnd){
@@ -372,39 +526,7 @@ async function loadDBData(pStart, pEnd){
     finally{ clearTimeout(tid); }
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const result=await resp.json();
-
-    DB.shutdownRows=result.shutdowns||[];
-    DB.marelliFlatZeroSAs=new Set(result.marelliSuppressedSageCodes||[]);
-    // pricedAgreements covers both Flat Rate and Monthly Pricing
-    // Store as arrays per sageLocationCode — one location can have multiple agreements
-    DB.flatRateMap={};
-    (result.pricedAgreements||[]).forEach(a=>{
-      if(!a.sageLocationCode)return;
-      if(!DB.flatRateMap[a.sageLocationCode]) DB.flatRateMap[a.sageLocationCode]=[];
-      DB.flatRateMap[a.sageLocationCode].push(a);
-    });
-    // contractedAgreements: Legacy (Contracted Units) — Items A/B/C
-    // Same pattern: arrays per sageLocationCode for multi-agreement locations
-    DB.contractedMap={};
-    (result.contractedAgreements||[]).forEach(a=>{
-      if(!a.sageLocationCode)return;
-      if(!DB.contractedMap[a.sageLocationCode]) DB.contractedMap[a.sageLocationCode]=[];
-      DB.contractedMap[a.sageLocationCode].push(a);
-    });
-    // Lookup-by-number for MEMO parsing. Both priced and contracted agreements share the namespace.
-    DB.agreementByNumber={};
-    DB.knownAgreementNumbers=new Set();
-    [...(result.pricedAgreements||[]),...(result.contractedAgreements||[])].forEach(a=>{
-      if(a.agreementNumber!=null){
-        const n=String(a.agreementNumber);
-        DB.agreementByNumber[n]=a;
-        DB.knownAgreementNumbers.add(n);
-      }
-    });
-    // Optional: producing-facility map keyed by agreementNumber. Absent until the n8n side ships.
-    DB.producingFacilities=result.agreementProducingFacilities||{};
-    // invoiceSettings: accountNumber → 'Normal' | 'Days The Plant Is Open'
-    DB.invoiceSettings=result.invoiceSettings||{};
+    populateDBFromResponse(DB,result);
 
     DB.connected=true; DB.loading=false;
     DB.loadedForPeriod=pStart+':'+pEnd;
@@ -1935,6 +2057,237 @@ document.addEventListener('keydown',e=>{
     if(m&&!m.classList.contains('hidden'))hideChangelog();
   }
 });
+
+// ── PRE-BILL RECONCILIATION TAB (v1.5.0 Phase 1: shell + parsing) ─────────
+// Tab navigation
+function switchTab(name){
+  ['MonthEnd','Recon'].forEach(t=>{
+    const pane=document.getElementById('tab'+t);
+    const btn=document.querySelector('.tab-btn[data-tab="'+t+'"]');
+    if(pane)pane.classList.toggle('hidden',t!==name);
+    if(btn)btn.classList.toggle('active',t===name);
+  });
+}
+
+// Reconciliation period auto-fill: when the user picks the new pre-bill
+// period start, default the prior period to the immediately preceding
+// calendar month. Allow override.
+function onReconNewStartChange(){
+  const ns=document.getElementById('rNewStart').value;
+  if(ns){
+    const d=new Date(ns);
+    // New period end defaults to last day of the new period's calendar month
+    const newEnd=new Date(d.getFullYear(),d.getMonth()+1,0);
+    const newEndEl=document.getElementById('rNewEnd');
+    if(newEndEl&&!newEndEl.value)newEndEl.value=isoLocal(newEnd);
+    // Prior period = the immediately preceding calendar month
+    const priorStart=new Date(d.getFullYear(),d.getMonth()-1,1);
+    const priorEnd=new Date(d.getFullYear(),d.getMonth(),0);
+    const psEl=document.getElementById('rPriorStart');
+    const peEl=document.getElementById('rPriorEnd');
+    if(psEl&&!psEl.value)psEl.value=isoLocal(priorStart);
+    if(peEl&&!peEl.value)peEl.value=isoLocal(priorEnd);
+    // Total weekdays in prior period
+    const wdEl=document.getElementById('rPriorWD');
+    if(wdEl&&!wdEl.value)wdEl.value=countWeekdays(priorStart,priorEnd);
+    // Invoice/GL date defaults: 1st of new month for GL, first weekday of new month for invoice
+    const glEl=document.getElementById('rNewGL');
+    if(glEl&&!glEl.value)glEl.value=isoLocal(d);
+    const invEl=document.getElementById('rNewInv');
+    if(invEl&&!invEl.value){
+      const fb=new Date(d);
+      while(fb.getDay()===0||fb.getDay()===6)fb.setDate(fb.getDate()+1);
+      invEl.value=isoLocal(fb);
+    }
+  }
+  onReconPeriodChange();
+}
+function isoLocal(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function onReconPeriodChange(){checkReconReadiness();}
+
+// Reconciliation status bar (mirrors setDBStatus shape)
+function setReconDBStatus(type,text){
+  const bar=document.getElementById('rDbStatusBar');
+  if(!bar)return;
+  bar.className='db-bar '+type;
+  bar.innerHTML=(type==='loading'?'<div class="db-spin"></div>':'')+`<span>${text}</span>`;
+}
+
+// Drag & drop for the recon upload slots (mirrors dv/dl/dd)
+function rdv(e,k){e.preventDefault();document.getElementById('rsl-'+k).classList.add('dov');}
+function rdl(k){document.getElementById('rsl-'+k).classList.remove('dov');}
+function rdd(e,k){e.preventDefault();rdl(k);const f=e.dataTransfer.files[0];if(f)rlf(f,k);}
+function rlf(file,key){
+  if(!file)return;
+  const slot=key==='prior'?'priorPreBill':'newPreBill';
+  RECON[slot].fn=file.name.replace(/\.xlsx?$/i,'');
+  const r=new FileReader();
+  r.onload=e=>{
+    RECON[slot].wb=XLSX.read(e.target.result,{type:'array',cellDates:false,raw:true});
+    document.getElementById('rsl-'+key).classList.add('ld');
+    document.getElementById('rsn-'+key).className='sok';
+    document.getElementById('rsn-'+key).textContent='✓ '+file.name;
+    renderReconFileSummary();
+    checkReconReadiness();
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function renderReconFileSummary(){
+  const sum=document.getElementById('rfsum');if(!sum)return;
+  const lines=[];
+  if(RECON.priorPreBill.wb)lines.push(`Prior pre-bill: ${RECON.priorPreBill.fn} · ${RECON.priorPreBill.wb.SheetNames.length} sheet${RECON.priorPreBill.wb.SheetNames.length!==1?'s':''}`);
+  if(RECON.newPreBill.wb)lines.push(`New pre-bill: ${RECON.newPreBill.fn} · ${RECON.newPreBill.wb.SheetNames.length} sheet${RECON.newPreBill.wb.SheetNames.length!==1?'s':''}`);
+  sum.textContent=lines.join('  ·  ');
+}
+
+function checkReconReadiness(){
+  const btn=document.getElementById('reconBtn');
+  const note=document.getElementById('reconNote');
+  if(!btn)return;
+  const missing=[];
+  if(!document.getElementById('rPriorStart').value||!document.getElementById('rPriorEnd').value) missing.push('prior period');
+  if(!document.getElementById('rNewStart').value||!document.getElementById('rNewEnd').value) missing.push('new period');
+  if(!document.getElementById('rNewInv').value) missing.push('new pre-bill invoice date');
+  if(!RECON.priorPreBill.wb) missing.push('prior pre-bill file');
+  if(!RECON.newPreBill.wb) missing.push('new pre-bill file');
+  btn.disabled=missing.length>0;
+  if(note)note.textContent=missing.length?'Still needed: '+missing.join(', '):'';
+}
+
+// Build a billedSnapshot from the prior pre-bill workbook. Shape:
+//   { custId: { sa: {
+//       byItem: { '1001':[{i,row,sName,desc,memo,qty,price}, ...], ... },
+//       totals: { '1001':{qty,priceSum}, ... }
+//   } } }
+function buildBilledSnapshot(wb){
+  const snap={};
+  if(!wb)return snap;
+  wb.SheetNames.forEach(sName=>{
+    const ws=wb.Sheets[sName];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(rows.length<2)return;
+    const hdr=rows[0];
+    const ci=(n)=>hdr.indexOf(n);
+    const cF=ci('CUSTOMER_ID'),cI=ci('ITEMID'),cQ=ci('QUANTITY'),cP=ci('PRICE');
+    const cClass=ci('SODOCUMENTENTRY_CLASSID'),cDesc=ci('ITEMDESC');
+    const cMemo=ci('MEMO');
+    if(cI===-1||cP===-1)return;
+    let cust='';
+    rows.forEach((row,i)=>{
+      if(i===0)return;
+      if(row[cF]&&row[cF]!=='')cust=String(row[cF]).trim();
+      const sa=cClass!==-1?String(row[cClass]||'').trim():'';
+      const itemId=String(row[cI]||'').trim();
+      if(!cust||!sa||!itemId)return;
+      const desc=cDesc!==-1?String(row[cDesc]||''):'';
+      const memo=cMemo!==-1?String(row[cMemo]||''):'';
+      const qty=parseFloat(row[cQ])||0;
+      const price=parseFloat(row[cP])||0;
+      snap[cust]=snap[cust]||{};
+      snap[cust][sa]=snap[cust][sa]||{byItem:{},totals:{},sheets:new Set()};
+      snap[cust][sa].sheets.add(sName);
+      (snap[cust][sa].byItem[itemId]=snap[cust][sa].byItem[itemId]||[])
+        .push({i,row:[...row],sName,desc,memo,qty,price});
+      const t=snap[cust][sa].totals[itemId]=snap[cust][sa].totals[itemId]||{qty:0,priceSum:0};
+      t.qty+=qty;t.priceSum+=price;
+    });
+  });
+  return snap;
+}
+
+// DB_PRIOR loader — same fetch as loadDBData, writes to DB_PRIOR, updates the
+// recon status bar instead of the main one. Phase 3 fields (additionalHours,
+// weekendProduction) populate gracefully when n8n adds Queries 6+7.
+async function loadDBPrior(pStart,pEnd){
+  if(DB_PRIOR.loading)return;
+  DB_PRIOR.loading=true;
+  setReconDBStatus('loading','Querying Qnet database (prior period)...');
+  const url=CONFIG.n8n.dbWebhook+'?pStart='+encodeURIComponent(pStart)+'&pEnd='+encodeURIComponent(pEnd);
+  try{
+    const controller=new AbortController();
+    const tid=setTimeout(()=>controller.abort(),20000);
+    let resp;
+    try{resp=await fetch(url,{method:'GET',signal:controller.signal});}
+    finally{clearTimeout(tid);}
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const result=await resp.json();
+    populateDBFromResponse(DB_PRIOR,result);
+    DB_PRIOR.connected=true;DB_PRIOR.loading=false;
+    DB_PRIOR.loadedForPeriod=pStart+':'+pEnd;
+    const sd=new Set(DB_PRIOR.shutdownRows.map(r=>r.id)).size;
+    const cu=Object.keys(DB_PRIOR.contractedMap).length;
+    const wp=Object.values(DB_PRIOR.weekendProductionBySA).reduce((s,a)=>s+a.length,0);
+    const ah=Object.values(DB_PRIOR.additionalHoursBySA).reduce((s,a)=>s+a.length,0);
+    setReconDBStatus('ok','✅ Prior-period DB loaded — '+sd+' shutdowns · '+cu+' CU agreements · '+wp+' WP rows · '+ah+' AH rows');
+  }catch(err){
+    DB_PRIOR.loading=false;DB_PRIOR.connected=false;
+    setReconDBStatus('warn','⚠ Prior-period DB unavailable ('+err.message+')');
+  }
+}
+
+// Phase 1 reconcile orchestrator: builds billedSnapshot, loads DB_PRIOR, then
+// renders a Step 3 stub. Phases 2+3 will plug expectedSnapshot + retro diff
+// into this function before rendering.
+async function reconcile(){
+  const priorStart=document.getElementById('rPriorStart').value;
+  const priorEnd=document.getElementById('rPriorEnd').value;
+  const btn=document.getElementById('reconBtn');
+  const note=document.getElementById('reconNote');
+  if(btn)btn.disabled=true;
+  if(note)note.textContent='⏳ Building snapshot...';
+
+  RECON.billedSnapshot=buildBilledSnapshot(RECON.priorPreBill.wb);
+  const custCount=Object.keys(RECON.billedSnapshot).length;
+
+  if(!DB_PRIOR.connected||DB_PRIOR.loadedForPeriod!==priorStart+':'+priorEnd){
+    await loadDBPrior(priorStart,priorEnd);
+  }
+
+  if(note)note.textContent='';
+  if(btn)btn.disabled=false;
+  reconRenderStep3Stub(custCount);
+  reconSetStep(3);
+}
+
+function reconSetStep(n){for(let i=1;i<=4;i++){const el=document.getElementById('rst'+i);if(el)el.className='stp'+(i===n?' active':i<n?' done':'');}}
+
+function reconRenderStep3Stub(custCount){
+  const c=document.getElementById('rs3');if(!c)return;
+  const ahReady=Object.keys(DB_PRIOR.additionalHoursBySA).length>0;
+  const wpReady=Object.keys(DB_PRIOR.weekendProductionBySA).length>0;
+  c.classList.remove('hidden');
+  c.innerHTML=`
+    <div class="card">
+      <div class="ch"><div class="cn">3</div><div class="ct">Review Retro Changes</div><div class="cd">Phase 1 — snapshot built; diff arrives in v1.6.0</div></div>
+      <div class="cb">
+        <div class="recon-empty">
+          <div style="font-size:18px;margin-bottom:8px">📊</div>
+          <div style="margin-bottom:6px"><b>${custCount}</b> pre-bill customer${custCount!==1?'s':''} found in the prior file</div>
+          <div style="font-size:12px;color:var(--t3);margin-bottom:14px">
+            DB prior-period status:
+            ${DB_PRIOR.connected?'<span style="color:var(--green)">connected</span>':'<span style="color:var(--amber)">unavailable</span>'}
+            · AH query: ${ahReady?'<span style="color:var(--green)">live</span>':'<span style="color:var(--amber)">awaiting n8n Q7</span>'}
+            · WP query: ${wpReady?'<span style="color:var(--green)">live</span>':'<span style="color:var(--amber)">awaiting n8n Q6</span>'}
+          </div>
+          <div style="font-size:12px;color:var(--t2);max-width:520px;margin:0 auto;line-height:1.5">
+            Phase 1 (this release) lays the foundation: tabs, period inputs, file uploads, and the prior-pre-bill billed snapshot.
+            <b>v1.6.0</b> will add the expected-vs-billed diff for shutdowns / contracted-units / pricing changes / taxes / volume discounts.
+            <b>v1.7.0</b> will close the AH and WP retro paths once n8n Queries 6 and 7 ship.
+          </div>
+        </div>
+      </div>
+    </div>`;
+  // Step 4 stub
+  const s4=document.getElementById('rs4');
+  if(s4){
+    s4.classList.remove('hidden');
+    document.getElementById('rdlContent').innerHTML='<div class="recon-empty" style="padding:18px">Augmented CSVs will appear here once the diff phase ships. For now this tab validates uploads + DB connectivity.</div>';
+  }
+}
+
+function reconUploadAll(){alert('SharePoint upload wires up in v1.6.0 once retro CSVs are generated.');}
+function reconDownloadAll(){alert('Download wires up in v1.6.0 once retro CSVs are generated.');}
 
 window.addEventListener('DOMContentLoaded',()=>{
   const vb=document.getElementById('verBtn');
