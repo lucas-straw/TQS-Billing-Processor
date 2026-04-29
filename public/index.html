@@ -375,8 +375,17 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.2';
+const APP_VERSION='1.7.3';
 const CHANGELOG=[
+  {
+    version:'1.7.3',
+    date:'2026-04-29',
+    changes:[
+      'Reconciliation diagnostic: when a billed pre-bill row references an agreement number in MEMO but that number isn\'t loaded in DB_PRIOR, the diagnostic now surfaces the specific number and the most likely causes — typically an n8n contractedAgreements query filter that excludes <code>priceType IS NULL</code>, an expired agreement, or a deleted one.',
+      'Previously the row just said "SA L10324 has 23 CU agreements but none match" — true but unhelpful. Now it says "Reference R234750 found in MEMO, but agreement R234750 is not loaded in DB_PRIOR." plus a list of likely causes, which points the reviewer at the right thing to fix.',
+      'Also improves the no-MEMO branch: shows the actual MEMO content when present so the reviewer can see why the parser couldn\'t extract a number.'
+    ]
+  },
   {
     version:'1.7.2',
     date:'2026-04-29',
@@ -2580,14 +2589,19 @@ function buildRetroAdjustments(priorStart){
       let agreementNumber=exp&&exp.agreementNumber||'';
       let inferredAgmt=exp&&exp.agreement;
       let priceType=inferredAgmt?(inferredAgmt.priceType||''):'';
+      // Capture the candidate number from MEMO even when it doesn't match
+      // DB_PRIOR — surfaces "extracted but not loaded" cases (n8n filter / expired / deleted).
+      let candidateAgmtNumber='';
       if(!agreementNumber&&sampleMemo){
         const matches=String(sampleMemo).match(/\d{3,}/g);
         if(matches){
+          if(matches.length)candidateAgmtNumber=matches[0];
           for(const n of matches){
             if(DB_PRIOR.agreementByNumber&&DB_PRIOR.agreementByNumber[n]){
               agreementNumber=n;
               inferredAgmt=DB_PRIOR.agreementByNumber[n];
               priceType=inferredAgmt.priceType||'';
+              candidateAgmtNumber=''; // matched — no need to surface as "missing"
               break;
             }
           }
@@ -2600,6 +2614,11 @@ function buildRetroAdjustments(priorStart){
         if(inferredAgmt){
           if(inferredAgmt.expireTime)diagnosticNote=`Agreement R${agreementNumber} (${priceType||'?'}) — expired ${inferredAgmt.expireTime}.`;
           else diagnosticNote=`Agreement R${agreementNumber} (${priceType||'?'}) — active in DB but no expected billing for ${type}. Likely a price-type mismatch (e.g. agreement is ${priceType}, billed row is ${type}).`;
+        } else if(candidateAgmtNumber){
+          // Extracted from MEMO but not in DB_PRIOR — most common cause is the
+          // n8n contractedAgreements query filter excluding NULL priceType, or
+          // the agreement having expired before the prior period started.
+          diagnosticNote=`Reference R${candidateAgmtNumber} found in MEMO, but agreement R${candidateAgmtNumber} is not loaded in DB_PRIOR. Likely causes: (a) excluded by n8n contractedAgreements query (commonly: priceType IS NULL not in filter), (b) expired before the prior period (filtered by expireTime ≥ pStart), or (c) deleted in Qnet.`;
         } else if(agreementNumber){
           diagnosticNote=`Agreement R${agreementNumber} not found in DB for prior period — may have been deleted or the period dates don't include it.`;
         } else {
@@ -2611,7 +2630,7 @@ function buildRetroAdjustments(priorStart){
             const parts=[];
             if(cuList.length)parts.push(cuList.length+' CU agreement'+(cuList.length!==1?'s':''));
             if(prList.length)parts.push(prList.length+' priced agreement'+(prList.length!==1?'s':''));
-            diagnosticNote=`SA ${sa} has ${parts.join(' + ')} in DB but none match this billed type (no agreement number in MEMO to disambiguate).`;
+            diagnosticNote=`SA ${sa} has ${parts.join(' + ')} in DB but couldn't extract any agreement number from MEMO ("${sampleMemo}") to disambiguate.`;
           }
         }
       }
