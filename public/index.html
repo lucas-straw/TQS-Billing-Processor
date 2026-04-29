@@ -375,8 +375,20 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.5.0';
+const APP_VERSION='1.6.0';
 const CHANGELOG=[
+  {
+    version:'1.6.0',
+    date:'2026-04-28',
+    changes:[
+      'Pre-Bill Reconciliation <b>Phase 2</b>: <code>expectedSnapshot</code> builder + retro diff. For every (customer × SA) on the prior pre-bill, computes what should have been billed against current Qnet state for: contracted units (per-week math respecting <code>invoiceSetting</code>), monthly pricing pro-ration, flat rate pro-ration, and shutdown credits.',
+      'Step 3 review UI: retro adjustments grouped by type with Accept / Fix / Skip per row, plus <i>Accept All</i> / <i>Skip All</i> at section and global level. Live summary bar shows totals, charges, credits, and net retro impact.',
+      'Step 4 augmented CSV generation: appends accepted retro rows to each customer\'s invoice block on the new pre-bill (LINE numbering continues sequentially). Customers with retros but no presence in the new pre-bill get a standalone retro-only block. Memo prefix follows <code>Retro-Change [Mon YYYY]: &lt;original memo&gt;</code>.',
+      'Per-sheet CSV download wired up. SharePoint upload follows in a separate release.',
+      '<code>getApplicableShutdowns</code> refactored to accept an optional <code>dbState</code> parameter, so the prior-period query can run against <code>DB_PRIOR</code> without affecting the Month-End flow.',
+      'Adds <code>docs/ROLLBACK.md</code> with the per-version SHA map and revert playbook (squash vs merge handling, multi-version rollback, Azure-side options).'
+    ]
+  },
   {
     version:'1.5.0',
     date:'2026-04-28',
@@ -554,12 +566,14 @@ function setDBStatus(type,text){
 function stripSAPrefix(sa){return String(sa||'').replace(/^[A-Za-z]/,'');}
 
 // Returns unique shutdown records applicable to this SA/locationCode in the given date range
-function getApplicableShutdowns(sageLocCode,rangeStart,rangeEnd,psaAgreementNumber){
+function getApplicableShutdowns(sageLocCode,rangeStart,rangeEnd,psaAgreementNumber,dbState){
   // sageLocCode: e.g. "L10299" — matches SODOCUMENTENTRY_CLASSID in billing export
   // psaAgreementNumber: optional — if provided, filter agreement-specific shutdowns to only this agreement
+  // dbState: optional — defaults to global DB; pass DB_PRIOR for the reconciliation flow
+  const db=dbState||DB;
   const rs=new Date(rangeStart),re=new Date(rangeEnd);
   const byId={};
-  DB.shutdownRows.forEach(sd=>{
+  db.shutdownRows.forEach(sd=>{
     if(sd.sageLocationCode!==sageLocCode)return;
     const ss=new Date(sd.startTime),se=new Date(sd.endTime);
     if(ss>re||se<rs)return;
@@ -668,6 +682,25 @@ function computeBillingCycle(today=new Date()){
 }
 function withinTol(b,c){if(c===0&&b===0)return true;if(c===0)return false;return Math.abs((b-c)/c)*100<=tol();}
 function countWeekdays(start,end){let d=new Date(start),count=0;const e=new Date(end);while(d<=e){const wd=d.getDay();if(wd!==0&&wd!==6)count++;d.setDate(d.getDate()+1);}return count;}
+
+// Iterates Mon-Fri weeks intersecting [pStart, pEnd]. Each call to cb gets the
+// week's Mon date and Fri date (clamped to the period bounds).
+function forEachMonFriWeek(pStart,pEnd,cb){
+  const ps=new Date(pStart),pe=new Date(pEnd);
+  let mon=new Date(ps);while(mon.getDay()!==1)mon.setDate(mon.getDate()-1);
+  while(mon<=pe){
+    const fri=new Date(mon);fri.setDate(fri.getDate()+4);
+    const wkStart=new Date(Math.max(mon,ps));
+    const wkEnd=new Date(Math.min(fri,pe));
+    if(wkStart<=wkEnd)cb(mon,fri,wkStart,wkEnd);
+    mon.setDate(mon.getDate()+7);
+  }
+}
+function formatRetroPeriod(priorStart){
+  const d=new Date(priorStart);
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return`${months[d.getMonth()]} ${d.getFullYear()}`;
+}
 
 // Extract an agreement number from a MEMO field by finding the first digit run
 // that matches a known agreement in the loaded DB. Prefix-agnostic — works with
@@ -2244,50 +2277,474 @@ async function reconcile(){
     await loadDBPrior(priorStart,priorEnd);
   }
 
+  // Build expectedSnapshot from DB_PRIOR + retroAdjustments diff
+  RECON.expectedSnapshot=buildExpectedSnapshot(priorStart,priorEnd);
+  RECON.retroAdjustments=buildRetroAdjustments(priorStart);
+
   if(note)note.textContent='';
   if(btn)btn.disabled=false;
-  reconRenderStep3Stub(custCount);
+  renderReconStep3(custCount);
   reconSetStep(3);
 }
 
 function reconSetStep(n){for(let i=1;i<=4;i++){const el=document.getElementById('rst'+i);if(el)el.className='stp'+(i===n?' active':i<n?' done':'');}}
 
-function reconRenderStep3Stub(custCount){
-  const c=document.getElementById('rs3');if(!c)return;
-  const ahReady=Object.keys(DB_PRIOR.additionalHoursBySA).length>0;
-  const wpReady=Object.keys(DB_PRIOR.weekendProductionBySA).length>0;
-  c.classList.remove('hidden');
-  c.innerHTML=`
-    <div class="card">
-      <div class="ch"><div class="cn">3</div><div class="ct">Review Retro Changes</div><div class="cd">Phase 1 — snapshot built; diff arrives in v1.6.0</div></div>
-      <div class="cb">
-        <div class="recon-empty">
-          <div style="font-size:18px;margin-bottom:8px">📊</div>
-          <div style="margin-bottom:6px"><b>${custCount}</b> pre-bill customer${custCount!==1?'s':''} found in the prior file</div>
-          <div style="font-size:12px;color:var(--t3);margin-bottom:14px">
-            DB prior-period status:
-            ${DB_PRIOR.connected?'<span style="color:var(--green)">connected</span>':'<span style="color:var(--amber)">unavailable</span>'}
-            · AH query: ${ahReady?'<span style="color:var(--green)">live</span>':'<span style="color:var(--amber)">awaiting n8n Q7</span>'}
-            · WP query: ${wpReady?'<span style="color:var(--green)">live</span>':'<span style="color:var(--amber)">awaiting n8n Q6</span>'}
-          </div>
-          <div style="font-size:12px;color:var(--t2);max-width:520px;margin:0 auto;line-height:1.5">
-            Phase 1 (this release) lays the foundation: tabs, period inputs, file uploads, and the prior-pre-bill billed snapshot.
-            <b>v1.6.0</b> will add the expected-vs-billed diff for shutdowns / contracted-units / pricing changes / taxes / volume discounts.
-            <b>v1.7.0</b> will close the AH and WP retro paths once n8n Queries 6 and 7 ship.
-          </div>
-        </div>
-      </div>
-    </div>`;
-  // Step 4 stub
-  const s4=document.getElementById('rs4');
-  if(s4){
-    s4.classList.remove('hidden');
-    document.getElementById('rdlContent').innerHTML='<div class="recon-empty" style="padding:18px">Augmented CSVs will appear here once the diff phase ships. For now this tab validates uploads + DB connectivity.</div>';
+// expectedSnapshot: { custId: { sa: { type: {amount, agreement, agreementNumber, calc, itemId} } } }
+// type ∈ 'contracted-units' | 'monthly-pricing' | 'flat-rate' | 'shutdown-credit'
+function buildExpectedSnapshot(pStart,pEnd){
+  const out={};
+  const push=(cust,sa,type,data)=>{
+    out[cust]=out[cust]||{};
+    out[cust][sa]=out[cust][sa]||{};
+    out[cust][sa][type]=data;
+  };
+  const periodWD=countWeekdays(pStart,pEnd);
+
+  // Contracted Units (1001) — per-week math
+  Object.entries(DB_PRIOR.contractedMap||{}).forEach(([sa,agmts])=>{
+    if(DB_PRIOR.marelliFlatZeroSAs.has(sa))return;
+    agmts.forEach(agmt=>{
+      const cust=agmt.customerCode||agmt.accountNumber;
+      if(!cust)return;
+      const rate=parseFloat(agmt.rate)||0;
+      const ch=parseFloat(agmt.weeklyContractedUnits||agmt.contractHours)||0;
+      if(rate<=0||ch<=0)return;
+      const inv=agmt.invoiceSetting||DB_PRIOR.invoiceSettings[cust]||'Normal';
+      const aStart=agmt.startTime?new Date(agmt.startTime):new Date(pStart);
+      const aEnd=agmt.expireTime?new Date(agmt.expireTime):new Date(pEnd);
+      let total=0;
+      forEachMonFriWeek(pStart,pEnd,(mon,fri,wkStart,wkEnd)=>{
+        // Clamp to agreement active range
+        const aWkStart=new Date(Math.max(wkStart,aStart));
+        const aWkEnd=new Date(Math.min(wkEnd,aEnd));
+        if(aWkStart>aWkEnd)return;
+        const sds=getApplicableShutdowns(sa,mon.toISOString().slice(0,10),fri.toISOString().slice(0,10),agmt.agreementNumber,DB_PRIOR);
+        const fullWeekSd=sds.some(sd=>{const ss=new Date(sd.startTime),se=new Date(sd.endTime);return ss<=mon&&se>=fri;});
+        const wkActiveDays=countWeekdays(aWkStart,aWkEnd);
+        if(inv==='Normal'){
+          if(fullWeekSd)return; // 0
+          // Full or partial week — bill prorated to active days vs 5
+          total+=(wkActiveDays/5)*ch*rate;
+        } else { // Days The Plant Is Open
+          // Per-day rate × days the plant operated (active days minus shutdown days)
+          let shutDays=0;
+          sds.forEach(sd=>{
+            const ss=new Date(Math.max(new Date(sd.startTime),aWkStart));
+            const se=new Date(Math.min(new Date(sd.endTime),aWkEnd));
+            if(ss<=se)shutDays+=countWeekdays(ss,se);
+          });
+          const opDays=Math.max(0,wkActiveDays-shutDays);
+          total+=(ch/5)*opDays*rate;
+        }
+      });
+      push(cust,sa,'contracted-units',{
+        amount:r2(total),agreement:agmt,agreementNumber:String(agmt.agreementNumber||''),
+        itemId:'1001',
+        calc:`${ch} u × $${rate} · ${inv} · prior period prorate w/ shutdowns = $${r2(total)}`
+      });
+    });
+  });
+
+  // Priced agreements: Monthly Pricing + Flat Rate (1005), and shutdown credits
+  Object.entries(DB_PRIOR.flatRateMap||{}).forEach(([sa,agmts])=>{
+    if(DB_PRIOR.marelliFlatZeroSAs.has(sa))return;
+    agmts.forEach(agmt=>{
+      const cust=agmt.accountNumber;
+      if(!cust)return;
+      const rate=parseFloat(agmt.rate)||0;
+      if(rate<=0)return;
+      const freq=agmt.flatRateFrequency||'';
+      const isMonthlyBill=!freq||freq==='Monthly';
+      const aStart=agmt.startTime?new Date(agmt.startTime):new Date(pStart);
+      const aEnd=agmt.expireTime?new Date(agmt.expireTime):new Date(pEnd);
+      const activeStart=new Date(Math.max(aStart,new Date(pStart)));
+      const activeEnd=new Date(Math.min(aEnd,new Date(pEnd)));
+      if(activeStart>activeEnd)return;
+      const activeWD=countWeekdays(activeStart,activeEnd);
+
+      const isMP=(agmt.priceType||'').toLowerCase().includes('monthly');
+      const baseAmt=isMonthlyBill?r2((activeWD/periodWD)*rate):null;
+      const type=isMP?'monthly-pricing':'flat-rate';
+      if(baseAmt!==null){
+        push(cust,sa,type,{
+          amount:baseAmt,agreement:agmt,agreementNumber:String(agmt.agreementNumber||''),
+          itemId:'1005',
+          calc:`${isMP?'Monthly Pricing':'Flat Rate'} · ${activeWD}/${periodWD} active WD × $${rate} = $${baseAmt}`
+        });
+      } else {
+        push(cust,sa,type,{
+          amount:null,agreement:agmt,agreementNumber:String(agmt.agreementNumber||''),
+          itemId:'1005',
+          calc:`Flat Rate · freq=${freq} · ${activeWD}/${periodWD} active WD · rate=$${rate} (manual verification)`
+        });
+      }
+
+      // Shutdown credit
+      const sds=getApplicableShutdowns(sa,pStart,pEnd,agmt.agreementNumber,DB_PRIOR);
+      const fullWeeks=countFullShutdownWeeks(sds,pStart,pEnd);
+      const totalPeriodWeeks=countFullShutdownWeeks([{startTime:pStart,endTime:pEnd}],pStart,pEnd);
+      const allShutdown=totalPeriodWeeks>0&&fullWeeks>=totalPeriodWeeks;
+      const credit=allShutdown?-rate:(fullWeeks>0?-calcFlatRateCredit(rate,freq||'Monthly',fullWeeks):0);
+      push(cust,sa,'shutdown-credit',{
+        amount:r2(credit),agreement:agmt,agreementNumber:String(agmt.agreementNumber||''),
+        itemId:'1005',
+        calc:fullWeeks>0?`${fullWeeks} full wk shutdown${fullWeeks>1?'s':''}${allShutdown?' (100% — full period)':''} · credit = $${r2(credit)}`:'No full-week shutdowns in prior period'
+      });
+    });
+  });
+
+  return out;
+}
+
+// Aggregates billed totals per (cust × sa × type) from the prior pre-bill snapshot.
+function getBilledTotal(snap,cust,sa,type){
+  const s=(snap[cust]||{})[sa];if(!s)return{amount:0,memo:'',rows:[]};
+  const collect=(itemIds,filterDesc)=>{
+    let amt=0,memo='',rows=[];
+    itemIds.forEach(id=>{
+      (s.byItem[id]||[]).forEach(r=>{
+        if(filterDesc&&!filterDesc(r.desc))return;
+        // Contracted-units rows have qty × price; everything else uses price as the line amount.
+        const lineAmt=id==='1001'?r.qty*r.price:r.price;
+        amt+=lineAmt;
+        if(!memo&&r.memo)memo=r.memo;
+        rows.push(r);
+      });
+    });
+    return{amount:r2(amt),memo,rows};
+  };
+  switch(type){
+    case'contracted-units':return collect(['1001']);
+    case'monthly-pricing':return collect(['1005'],d=>d.includes('Monthly Pricing'));
+    case'flat-rate':return collect(['1005'],d=>!d.includes('Shutdown')&&!d.includes('Monthly Pricing'));
+    case'shutdown-credit':return collect(['1005'],d=>d.includes('Shutdown Credit'));
+    default:return{amount:0,memo:'',rows:[]};
   }
 }
 
-function reconUploadAll(){alert('SharePoint upload wires up in v1.6.0 once retro CSVs are generated.');}
-function reconDownloadAll(){alert('Download wires up in v1.6.0 once retro CSVs are generated.');}
+// Diffs expected vs billed and produces retro adjustment entries. |delta|<$0.01 = match.
+function buildRetroAdjustments(priorStart){
+  const out=[];
+  const types=['contracted-units','monthly-pricing','flat-rate','shutdown-credit'];
+  // Union of (cust,sa) keys across both snapshots
+  const keys=new Set();
+  Object.entries(RECON.billedSnapshot).forEach(([c,sas])=>Object.keys(sas).forEach(sa=>keys.add(c+'|'+sa)));
+  Object.entries(RECON.expectedSnapshot).forEach(([c,sas])=>Object.keys(sas).forEach(sa=>keys.add(c+'|'+sa)));
+  keys.forEach(key=>{
+    const[cust,sa]=key.split('|');
+    if(DB_PRIOR.marelliFlatZeroSAs.has(sa))return;
+    types.forEach(type=>{
+      const billed=getBilledTotal(RECON.billedSnapshot,cust,sa,type);
+      const exp=((RECON.expectedSnapshot[cust]||{})[sa]||{})[type];
+      const expectedAmt=exp&&exp.amount!=null?exp.amount:0;
+      const retroAmount=r2(expectedAmt-billed.amount);
+      if(Math.abs(retroAmount)<0.01)return;
+      out.push({
+        id:'retro-'+(++cid),custId:cust,sa,type,
+        itemId:exp&&exp.itemId||(type==='contracted-units'?'1001':'1005'),
+        billed:billed.amount,expected:expectedAmt,retroAmount,
+        decision:null,fixedAmount:null,
+        agreement:exp&&exp.agreement,agreementNumber:exp&&exp.agreementNumber||'',
+        originalMemo:billed.memo,
+        desc:({'contracted-units':'Contracted Units','monthly-pricing':'Monthly Pricing','flat-rate':'Flat Rate','shutdown-credit':'Shutdown Credit'})[type],
+        calc:exp&&exp.calc||`No expected billing in prior period · billed $${billed.amount}`,
+        note:exp?'':'Customer was billed but no matching agreement found in DB_PRIOR — may have ended.'
+      });
+    });
+  });
+  return out;
+}
+
+function renderReconStep3(custCount){
+  const c=document.getElementById('rs3');if(!c)return;
+  c.classList.remove('hidden');
+  const adjs=RECON.retroAdjustments;
+  const charges=adjs.filter(a=>a.retroAmount>0).reduce((s,a)=>s+a.retroAmount,0);
+  const credits=adjs.filter(a=>a.retroAmount<0).reduce((s,a)=>s+a.retroAmount,0);
+  const net=r2(charges+credits);
+  const ahReady=Object.keys(DB_PRIOR.additionalHoursBySA).length>0;
+  const wpReady=Object.keys(DB_PRIOR.weekendProductionBySA).length>0;
+  const dbBanner=`<div style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:7px 12px;font-size:11px;color:var(--t2);margin-bottom:10px;font-family:'DM Mono',monospace">
+    DB prior-period: <span style="color:var(--green)">connected</span> · <b>${custCount}</b> pre-bill customer${custCount!==1?'s':''} ·
+    AH retros: ${ahReady?'<span style="color:var(--green)">live</span>':'<span style="color:var(--amber)">awaiting n8n Q7 (Phase 3)</span>'} ·
+    WP retros: ${wpReady?'<span style="color:var(--green)">live</span>':'<span style="color:var(--amber)">awaiting n8n Q6 (Phase 3)</span>'}
+  </div>`;
+
+  if(!adjs.length){
+    c.innerHTML=`
+    <div class="card">
+      <div class="ch"><div class="cn">3</div><div class="ct">Review Retro Changes</div><div class="cd">No adjustments needed — pre-bill matches DB</div></div>
+      <div class="cb">
+        ${dbBanner}
+        <div class="recon-empty">
+          <div style="font-size:20px;margin-bottom:8px">✅</div>
+          <div><b>0 retro adjustments</b> — the prior pre-bill is current as billed.</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:8px">You can still proceed to Step 4 to download the new pre-bill unmodified.</div>
+        </div>
+        <div class="btn-row" style="margin-top:14px"><button class="btn btn-g" onclick="reconcileGenerate()">⚙ Generate Augmented CSVs →</button></div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  // Group by type
+  const byType={};
+  adjs.forEach(a=>{(byType[a.type]=byType[a.type]||[]).push(a);});
+  const typeMeta={
+    'contracted-units':{l:'Contracted Units',i:'📊'},
+    'monthly-pricing':{l:'Monthly Pricing',i:'📅'},
+    'flat-rate':{l:'Flat Rate',i:'💵'},
+    'shutdown-credit':{l:'Shutdown Credits',i:'🏭'}
+  };
+
+  const sectionHtml=Object.entries(byType).map(([type,items])=>{
+    const{l,i}=typeMeta[type]||{l:type,i:'📋'};
+    return`<div class="rev needs" style="margin-bottom:8px">
+      <div class="rev-hdr" onclick="toggleRev(this)" style="justify-content:flex-start;gap:8px">
+        <span>${i} ${l}</span><span class="cnt">${items.length}</span>
+        <div style="margin-left:auto;display:flex;gap:5px" onclick="event.stopPropagation()">
+          <button class="ap ok" style="font-size:11px;padding:3px 9px" onclick="approveReconSection('${type}')">✓ All</button>
+          <button class="ap skip" style="font-size:11px;padding:3px 9px" onclick="skipReconSection('${type}')">— All</button>
+          <button class="tog" style="margin-left:4px">hide</button>
+        </div>
+      </div>
+      <div class="rev-body">
+        <div class="chrow hrow"><div class="cc">Customer / SA</div><div class="cc">Calc</div><div class="cc">Billed → Expected · Retro</div><div class="cc">Action</div></div>
+        ${items.map(a=>{
+          const sign=a.retroAmount>=0?'+':'';
+          return`<div class="chrow" id="rac-${a.id}">
+            <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
+              <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--red)">${a.custId}</span>
+              <span style="font-size:10px;color:var(--t3)">${a.sa}</span>
+              <span style="font-size:10px;color:var(--t3)">${a.agreementNumber?'R'+a.agreementNumber:''}</span>
+            </div>
+            <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
+              <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${a.calc}</span>
+              ${a.note?`<span style="font-size:10px;color:var(--amber);font-style:italic">${a.note}</span>`:''}
+            </div>
+            <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px;font-family:'DM Mono',monospace;font-size:11px">
+              <span>$${a.billed} → $${a.expected}</span>
+              <span style="color:${a.retroAmount<0?'var(--red)':'var(--green)'};font-weight:600">Retro: ${sign}$${a.retroAmount}</span>
+            </div>
+            <div class="apc" id="rapc-${a.id}">
+              <button class="ap ok" id="rok-${a.id}" onclick="radecide('${a.id}','accept')">✓</button>
+              <button class="ap fix" id="rfix-${a.id}" onclick="radecideFix('${a.id}')">Fix</button>
+              <button class="ap skip" id="rsk-${a.id}" onclick="radecide('${a.id}','skip')">—</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  c.innerHTML=`
+    <div class="card">
+      <div class="ch"><div class="cn">3</div><div class="ct">Review Retro Changes</div><div class="cd">${adjs.length} adjustment${adjs.length!==1?'s':''} computed</div></div>
+      <div class="cb">
+        ${dbBanner}
+        <div class="sbar">
+          <div class="sc"><div class="sv">${adjs.length}</div><div class="sl2">Total</div></div>
+          <div class="sc gc"><div class="sv">+$${r2(charges)}</div><div class="sl2">Charges</div></div>
+          <div class="sc ec"><div class="sv">-$${r2(Math.abs(credits))}</div><div class="sl2">Credits</div></div>
+          <div class="sc bc"><div class="sv">${net>=0?'+':'-'}$${r2(Math.abs(net))}</div><div class="sl2">Net</div></div>
+          <div class="sc"><div class="sv" id="rPending">${adjs.length}</div><div class="sl2">Pending</div></div>
+        </div>
+        <div class="btn-row" style="margin-bottom:10px">
+          <button class="ap ok" style="font-size:11px;padding:3px 10px" onclick="approveReconAll()">✓ Accept All</button>
+          <button class="ap skip" style="font-size:11px;padding:3px 10px" onclick="skipReconAll()">— Skip All</button>
+        </div>
+        ${sectionHtml}
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn btn-g" onclick="reconcileGenerate()">⚙ Generate Augmented CSVs →</button>
+          <span style="font-size:11px;color:var(--t2)" id="reconGenStat">Skipped or pending retros are excluded from the output.</span>
+        </div>
+      </div>
+    </div>`;
+  updateReconPending();
+}
+
+function radecide(id,choice){
+  const a=RECON.retroAdjustments.find(r=>r.id===id);if(!a)return;
+  a.decision=choice;
+  ['rok-','rfix-','rsk-'].forEach(p=>{const el=document.getElementById(p+id);if(el)el.classList.remove('act');});
+  const map={'accept':'rok-','fix':'rfix-','skip':'rsk-'};
+  const el=document.getElementById(map[choice]+id);if(el)el.classList.add('act');
+  updateReconPending();
+}
+function radecideFix(id){
+  const a=RECON.retroAdjustments.find(r=>r.id===id);if(!a)return;
+  const cell=document.getElementById('rapc-'+id);if(!cell)return;
+  cell.innerHTML=`<input type="number" step="0.01" id="rfin-${id}" value="${a.retroAmount}" style="width:80px;font-family:'DM Mono',monospace;font-size:11px;padding:3px 6px;border:1px solid var(--bd);border-radius:4px"/>
+  <button class="ap fix act" style="font-size:11px;padding:3px 9px" onclick="applyRetroFix('${id}')">Apply</button>
+  <button class="ap skip" style="font-size:11px;padding:3px 9px" onclick="renderReconStep3(Object.keys(RECON.billedSnapshot).length)">↩</button>`;
+}
+function applyRetroFix(id){
+  const a=RECON.retroAdjustments.find(r=>r.id===id);if(!a)return;
+  const inp=document.getElementById('rfin-'+id);
+  const v=parseFloat(inp&&inp.value);
+  if(isNaN(v))return;
+  a.fixedAmount=r2(v);a.decision='fix';
+  updateReconPending();
+  // Re-render to show the applied state
+  renderReconStep3(Object.keys(RECON.billedSnapshot).length);
+}
+function approveReconSection(type){RECON.retroAdjustments.filter(a=>a.type===type).forEach(a=>{a.decision='accept';});renderReconStep3(Object.keys(RECON.billedSnapshot).length);}
+function skipReconSection(type){RECON.retroAdjustments.filter(a=>a.type===type).forEach(a=>{a.decision='skip';});renderReconStep3(Object.keys(RECON.billedSnapshot).length);}
+function approveReconAll(){RECON.retroAdjustments.forEach(a=>{a.decision='accept';});renderReconStep3(Object.keys(RECON.billedSnapshot).length);}
+function skipReconAll(){RECON.retroAdjustments.forEach(a=>{a.decision='skip';});renderReconStep3(Object.keys(RECON.billedSnapshot).length);}
+function updateReconPending(){
+  const el=document.getElementById('rPending');if(!el)return;
+  el.textContent=RECON.retroAdjustments.filter(a=>a.decision===null).length;
+}
+
+// Builds a retro line-item row for the augmented pre-bill CSV.
+function buildRetroRow(hdr,retro,periodLabel,line){
+  const ci=(n)=>hdr.indexOf(n);
+  const r=Array(hdr.length).fill('');
+  const cClass=ci('SODOCUMENTENTRY_CLASSID'),cI=ci('ITEMID'),cQ=ci('QUANTITY'),cP=ci('PRICE'),cDesc=ci('ITEMDESC'),cMemo=ci('MEMO'),cLine=ci('LINE');
+  if(cClass!==-1)r[cClass]=retro.sa;
+  if(cI!==-1)r[cI]=retro.itemId;
+  if(cQ!==-1)r[cQ]=1;
+  const amt=retro.decision==='fix'?retro.fixedAmount:retro.retroAmount;
+  if(cP!==-1)r[cP]=amt;
+  if(cDesc!==-1)r[cDesc]=`Retro: ${retro.desc} (${periodLabel})`;
+  if(cMemo!==-1)r[cMemo]=`Retro-Change [${periodLabel}]: ${retro.originalMemo||(retro.agreementNumber?'Reference R'+retro.agreementNumber:'')}`;
+  if(cLine!==-1)r[cLine]=line;
+  return r;
+}
+
+// Step 4: generate augmented CSVs by appending accepted retro rows to each
+// customer's invoice block in the new pre-bill, plus standalone blocks for
+// orphan customers (had retros but aren't on the new pre-bill).
+function reconcileGenerate(){
+  const newWB=RECON.newPreBill.wb;
+  if(!newWB)return;
+  const newInv=document.getElementById('rNewInv').value;
+  const newGL=document.getElementById('rNewGL').value;
+  const priorStart=document.getElementById('rPriorStart').value;
+  const periodLabel=formatRetroPeriod(priorStart);
+  const accepted=RECON.retroAdjustments.filter(a=>a.decision==='accept'||a.decision==='fix');
+
+  // Group accepted retros by customer
+  const retrosByCust={};
+  accepted.forEach(a=>{(retrosByCust[a.custId]=retrosByCust[a.custId]||[]).push(a);});
+
+  RECON.csvData={};
+  RECON.log=[];
+
+  newWB.SheetNames.forEach(sName=>{
+    const ws=newWB.Sheets[sName];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(rows.length<2){RECON.csvData[sName]=toCSV(rows);return;}
+    const hdr=rows[0];
+    const ci=(n)=>hdr.indexOf(n);
+    const cF=ci('CUSTOMER_ID'),cLine=ci('LINE'),cDate=ci('DATE'),cGL=ci('GLPOSTINGDATE'),cState=ci('STATE'),cTxn=ci('TRANSACTIONTYPE');
+
+    // Pass 1: identify customer blocks
+    const blocks=[];let curBlock=null,curCust='';
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];const rowCust=cF!==-1?String(row[cF]||'').trim():'';
+      if(rowCust&&rowCust!==curCust){
+        if(curBlock)blocks.push(curBlock);
+        curBlock={cust:rowCust,startIdx:i,endIdx:i,lastLine:0};
+        curCust=rowCust;
+      } else if(curBlock){curBlock.endIdx=i;}
+      if(curBlock&&cLine!==-1){const ln=parseInt(row[cLine]);if(!isNaN(ln)&&ln>curBlock.lastLine)curBlock.lastLine=ln;}
+    }
+    if(curBlock)blocks.push(curBlock);
+
+    // Pass 2: rebuild with retros appended after each block
+    const handled=new Set();
+    const final=[hdr];let lastEmitted=0;
+    blocks.forEach(block=>{
+      for(let i=Math.max(1,lastEmitted+1);i<=block.endIdx;i++)final.push(rows[i]);
+      lastEmitted=block.endIdx;
+      const retros=retrosByCust[block.cust];
+      if(retros&&retros.length){
+        let line=block.lastLine;
+        retros.forEach(r=>{line++;final.push(buildRetroRow(hdr,r,periodLabel,line));});
+        handled.add(block.cust);
+        RECON.log.push(`${sName} · ${block.cust}: ${retros.length} retro row${retros.length!==1?'s':''} appended`);
+      }
+    });
+    for(let i=lastEmitted+1;i<rows.length;i++)final.push(rows[i]);
+
+    // Standalone blocks for customers with retros but no presence in this sheet
+    Object.entries(retrosByCust).forEach(([cust,retros])=>{
+      if(handled.has(cust))return;
+      // Only emit on the FIRST sheet to avoid duplication. Track globally.
+      if(RECON._orphanEmitted&&RECON._orphanEmitted.has(cust))return;
+      // Heuristic: emit on the first sheet we see that doesn't already have this cust
+      RECON._orphanEmitted=RECON._orphanEmitted||new Set();
+      RECON._orphanEmitted.add(cust);
+      const headerRow=Array(hdr.length).fill('');
+      if(cF!==-1)headerRow[cF]=cust;
+      if(cDate!==-1)headerRow[cDate]=fmt(newInv)||'';
+      if(cGL!==-1)headerRow[cGL]=fmt(newGL)||'';
+      if(cState!==-1)headerRow[cState]='Pending';
+      if(cTxn!==-1)headerRow[cTxn]='Sales Invoice';
+      if(cLine!==-1)headerRow[cLine]=1;
+      final.push(headerRow);
+      retros.forEach((r,idx)=>{
+        const retroRow=buildRetroRow(hdr,r,periodLabel,idx+2);
+        if(cF!==-1)retroRow[cF]='';
+        if(cDate!==-1)retroRow[cDate]='';
+        if(cGL!==-1)retroRow[cGL]='';
+        final.push(retroRow);
+      });
+      RECON.log.push(`${sName} · ${cust}: standalone retro-only block (${retros.length} row${retros.length!==1?'s':''})`);
+    });
+
+    RECON.csvData[sName]=toCSV(final);
+  });
+  // Reset orphan tracking after a generate so subsequent runs are clean
+  delete RECON._orphanEmitted;
+
+  renderReconStep4();
+  reconSetStep(4);
+  document.getElementById('rs4').scrollIntoView({behavior:'smooth'});
+}
+
+function renderReconStep4(){
+  const c=document.getElementById('rdlContent');if(!c)return;
+  const sheets=Object.keys(RECON.csvData);
+  if(!sheets.length){c.innerHTML='<div class="recon-empty" style="padding:18px">No CSVs generated. Reconcile and accept retros first.</div>';return;}
+  c.innerHTML=`
+    <div style="background:var(--s2);border:1px solid var(--bd);border-radius:6px;padding:9px 13px;font-size:11px;color:var(--t2);font-family:'DM Mono',monospace;margin-bottom:10px">
+      ${sheets.length} sheet${sheets.length!==1?'s':''} generated · ${RECON.retroAdjustments.filter(a=>a.decision==='accept'||a.decision==='fix').length} retro row${RECON.retroAdjustments.length!==1?'s':''} applied
+    </div>
+    ${sheets.map(s=>`<div class="dl-grp"><div class="dl-gh">
+      <span class="dl-lbl">${s}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:11px">${RECON.newPreBill.fn}-${s}-reconciled.csv</span>
+      <button class="ap ok" style="font-size:11px;padding:3px 9px;margin-left:auto" onclick="downloadReconCSV('${s}')">⬇ Download</button>
+    </div></div>`).join('')}
+    ${RECON.log.length?`<details style="margin-top:10px"><summary style="font-size:11px;color:var(--t2);cursor:pointer">Log (${RECON.log.length} entr${RECON.log.length!==1?'ies':'y'})</summary>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3);margin-top:8px;max-height:200px;overflow-y:auto;padding:8px;background:var(--s2);border-radius:4px">${RECON.log.map(l=>'· '+l).join('<br/>')}</div>
+    </details>`:''}`;
+}
+
+function downloadReconCSV(sName){
+  const csv=RECON.csvData[sName];if(!csv)return;
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${RECON.newPreBill.fn||'pre-bill'}-${sName}-reconciled.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function reconUploadAll(){alert('SharePoint upload arrives in a follow-up; download is wired in v1.6.0.');}
+function reconDownloadAll(){
+  if(!RECON.csvData||!Object.keys(RECON.csvData).length){alert('No augmented CSVs yet — click "Generate Augmented CSVs" first.');return;}
+  Object.entries(RECON.csvData).forEach(([sName,csv])=>{
+    const blob=new Blob([csv],{type:'text/csv'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${RECON.newPreBill.fn||'pre-bill'}-${sName}-reconciled.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+}
 
 window.addEventListener('DOMContentLoaded',()=>{
   const vb=document.getElementById('verBtn');
