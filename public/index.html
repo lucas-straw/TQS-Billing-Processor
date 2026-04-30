@@ -375,8 +375,16 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.5';
+const APP_VERSION='1.7.6';
 const CHANGELOG=[
+  {
+    version:'1.7.6',
+    date:'2026-04-30',
+    changes:[
+      'Bugfix: retro rows in the augmented pre-bill CSV had an empty MEMO column. Root cause was a case-sensitive, exact-match column lookup that returned -1 when the new pre-bill\'s header was even slightly different (whitespace, casing). Lookup is now case-insensitive and trims whitespace, applied across all column resolutions in the recon CSV gen — so MEMO, ITEMDESC, CUSTOMER_ID, LINE, etc. all resolve robustly even if Qnet exports vary slightly between runs.',
+      'Adds <code>docs/PROJECT_LOG.md</code> — a running log of project state, decisions, and open items to make it easier to pick up where we left off in future sessions without re-explaining everything.'
+    ]
+  },
   {
     version:'1.7.5',
     date:'2026-04-30',
@@ -2888,8 +2896,18 @@ function updateReconPending(){
 }
 
 // Builds a retro line-item row for the augmented pre-bill CSV.
+// Defensive header-index lookup: case-insensitive + whitespace-trimmed.
+// Some Qnet exports include trailing spaces / odd casing in headers; this avoids
+// silently writing empty cells when the header isn't an exact byte-for-byte match.
+function ciFind(hdr,name){
+  const target=String(name).trim().toUpperCase();
+  for(let i=0;i<hdr.length;i++){
+    if(String(hdr[i]||'').trim().toUpperCase()===target)return i;
+  }
+  return -1;
+}
 function buildRetroRow(hdr,retro,periodLabel,line){
-  const ci=(n)=>hdr.indexOf(n);
+  const ci=(n)=>ciFind(hdr,n);
   const r=Array(hdr.length).fill('');
   const cClass=ci('SODOCUMENTENTRY_CLASSID'),cI=ci('ITEMID'),cQ=ci('QUANTITY'),cP=ci('PRICE'),cDesc=ci('ITEMDESC'),cMemo=ci('MEMO'),cLine=ci('LINE');
   if(cClass!==-1)r[cClass]=retro.sa;
@@ -2927,7 +2945,7 @@ function reconcileGenerate(){
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
     if(rows.length<2){RECON.csvData[sName]=toCSV(rows);return;}
     const hdr=rows[0];
-    const ci=(n)=>hdr.indexOf(n);
+    const ci=(n)=>ciFind(hdr,n);
     const cF=ci('CUSTOMER_ID'),cLine=ci('LINE'),cDate=ci('DATE'),cGL=ci('GLPOSTINGDATE'),cState=ci('STATE'),cTxn=ci('TRANSACTIONTYPE');
 
     // Pass 1: identify customer blocks
