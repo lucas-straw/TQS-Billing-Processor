@@ -375,8 +375,15 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.3';
+const APP_VERSION='1.7.4';
 const CHANGELOG=[
+  {
+    version:'1.7.4',
+    date:'2026-04-30',
+    changes:[
+      'Bugfix: clicking <i>Generate Augmented CSVs</i> on the Reconciliation tab appeared to do nothing. Step 4\'s container card retained the <code>hidden</code> CSS class from the v1.5.0 stub, so the content was being generated correctly but stayed invisible. <code>renderReconStep4</code> now removes the <code>hidden</code> class on the <code>#rs4</code> card before rendering the download list.'
+    ]
+  },
   {
     version:'1.7.3',
     date:'2026-04-29',
@@ -2909,6 +2916,10 @@ function reconcileGenerate(){
 }
 
 function renderReconStep4(){
+  // Make sure the Step 4 card is visible — Phase 1 left it `hidden` by default
+  // since the stub was empty. Step 4 only becomes meaningful once retros are
+  // generated, so we unhide here rather than at page load.
+  const card=document.getElementById('rs4');if(card)card.classList.remove('hidden');
   const c=document.getElementById('rdlContent');if(!c)return;
   const sheets=Object.keys(RECON.csvData);
   if(!sheets.length){c.innerHTML='<div class="recon-empty" style="padding:18px">No CSVs generated. Reconcile and accept retros first.</div>';return;}
