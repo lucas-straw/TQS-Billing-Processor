@@ -14,7 +14,8 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
-| v1.7.9 | 2026-04-30 | HST (1053) and VAT (1047) retros computed when the underlying taxable items change. Per (cust × SA) aggregate; per-week granularity is a future refinement. | _pending merge_ |
+| v1.8.0 | 2026-04-30 | Volume discount (1096) recompute when CU/AH/WP retros change the base. HST/VAT now use post-discount net (matches existing Month-End audit). Closes Lucas's feedback loop. | _pending merge_ |
+| v1.7.9 | 2026-04-30 | HST (1053) and VAT (1047) retros on adjusted taxable base. Per (cust × SA) aggregate. | `396181a` |
 | v1.7.8 | 2026-04-30 | Retro rows now populate CURRENCY and SI_LINEITEM_DATE; MEMO is self-explanatory with shutdown dates / AH+WP counts inlined. | `b6c86d6` |
 | v1.7.7 | 2026-04-30 | Step 3 bulk actions visually flip per-row buttons + live Pending counter. | `f74c6b4` |
 | v1.7.6 | 2026-04-30 | Case-insensitive column lookup in recon CSV gen (fixes empty MEMO on retro rows). Adds PROJECT_LOG.md. | `7618091` |
@@ -51,7 +52,7 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 1. **HST / VAT recomputation against new retro net** — _shipped v1.7.9 (per cust × SA aggregate)._ Future refinement: per-`SI_LINEITEM_DATE` granularity per CLAUDE.md spec.
 
-2. **Volume discount recomputation** — _next up: v1.8.0._ When a CU retro changes the customer's billing tier, the 1096 discount needs adjusting. Read stated % from existing 1096 rows in billed snapshot, recompute against new base, generate retro for delta.
+2. **Volume discount recomputation** — _shipped v1.8.0._ Reads stated % from prior 1096 row's ITEMDESC, recomputes against new base, retro for delta. HST/VAT updated to use post-discount net.
 
 3. **Producing-facility routing for AH retros** — when an AH retro is for an agreement where `additionalHourResponsibility = 'Producing Facility'`, the retro should bill to the producing facility's C-code, not the parent. Currently emits under the agreement's `customerCode`/`accountNumber`. Workaround: use Skip + manual reroute via Month-End workflow.
 

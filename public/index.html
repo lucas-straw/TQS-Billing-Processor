@@ -375,8 +375,18 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.9';
+const APP_VERSION='1.8.0';
 const CHANGELOG=[
+  {
+    version:'1.8.0',
+    date:'2026-04-30',
+    changes:[
+      'Reconciliation now generates <b>volume discount</b> retros when CU / AH / WP retros change a customer\'s billable total at an SA. Stated % is parsed from the prior 1096 row\'s ITEMDESC ("Applied X%"). New discount = -newBase × pct, where newBase = sum of expected for 1001/1002/1003 types (per CLAUDE.md, volume discount applies to those item types specifically).',
+      'HST / VAT recompute now uses <b>post-discount net</b> (taxable sum - volume discount) instead of pre-discount, matching the existing audit logic in the Month-End flow. The volume-discount pass runs before the tax pass so HST/VAT pick up the new VD amount.',
+      'Step 3 now has a <b>Volume Discount</b> section. Retro MEMO: "Volume discount X% recompute on adjusted base ($Y)".',
+      'This closes the Pre-Bill Reconciliation loop on the four feedback items from Lucas: descriptive MEMO, CURRENCY/SI_LINEITEM_DATE on retro rows, HST adjustment, volume discount adjustment. Future refinements (per-`SI_LINEITEM_DATE` tax granularity, producing-facility routing for AH retros, SharePoint upload) tracked in <code>docs/PROJECT_LOG.md</code>.'
+    ]
+  },
   {
     version:'1.7.9',
     date:'2026-04-30',
@@ -2628,6 +2638,7 @@ function getBilledTotal(snap,cust,sa,type){
     case'weekend-production':return collect(['1003']);
     case'hst':return collect(['1053']);
     case'vat':return collect(['1047']);
+    case'volume-discount':return collect(['1096']);
     default:return{amount:0,memo:'',rows:[]};
   }
 }
@@ -2788,13 +2799,67 @@ function buildRetroAdjustments(priorStart){
     });
   });
 
+  // ── Volume discount recompute (1096) ─────────────────────────────────────
+  // When CU/AH/WP retros change a customer's billable total at an SA, the
+  // existing 1096 line (volume discount) needs adjusting. Stated % comes from
+  // the original 1096 row's ITEMDESC ("Applied X%"). New discount = -newBase × pct
+  // where newBase is the sum of expected taxable line items (1001/1002/1003).
+  // Per CLAUDE.md, volume discount is applied to 1001/1002/1003 specifically
+  // (not flat rate / monthly pricing).
+  const VD_BASE_TYPES=['contracted-units','additional-hours','weekend-production'];
+  const computeVDBase=(cust,sa)=>{
+    let total=0;
+    VD_BASE_TYPES.forEach(t=>{
+      const exp=((RECON.expectedSnapshot[cust]||{})[sa]||{})[t];
+      if(exp&&exp.amount!=null)total+=exp.amount;
+      else total+=getBilledTotal(RECON.billedSnapshot,cust,sa,t).amount;
+    });
+    return r2(total);
+  };
+  keys.forEach(key=>{
+    const[cust,sa]=key.split('|');
+    if(DB_PRIOR.marelliFlatZeroSAs.has(sa))return;
+    const billed=getBilledTotal(RECON.billedSnapshot,cust,sa,'volume-discount');
+    if(!billed.rows||!billed.rows.length)return;
+    // Parse stated pct from the first 1096 row's ITEMDESC ("Applied 5%")
+    const firstRow=billed.rows[0];
+    const pctMatch=String(firstRow.desc||'').match(/Applied\s+([\d.]+)%/i);
+    if(!pctMatch)return;
+    const pct=parseFloat(pctMatch[1])/100;
+    const newBase=computeVDBase(cust,sa);
+    const expectedDiscount=r2(-newBase*pct);
+    const retroAmount=r2(expectedDiscount-billed.amount);
+    // Stash on expectedSnapshot so the tax pass can reference it (post-discount net).
+    RECON.expectedSnapshot[cust]=RECON.expectedSnapshot[cust]||{};
+    RECON.expectedSnapshot[cust][sa]=RECON.expectedSnapshot[cust][sa]||{};
+    RECON.expectedSnapshot[cust][sa]['volume-discount']={amount:expectedDiscount,pct,base:newBase};
+    if(Math.abs(retroAmount)<0.01){matchCount++;return;}
+    const sampleCurrency=firstRow.currency||'';
+    const sampleLineDateRaw=firstRow.lineDate||'';
+    out.push({
+      id:'retro-'+(++cid),custId:cust,sa,type:'volume-discount',
+      itemId:'1096',
+      billed:billed.amount,expected:expectedDiscount,retroAmount,
+      decision:null,fixedAmount:null,
+      agreement:null,agreementNumber:'',priceType:'',
+      originalMemo:billed.memo,sampleMemo:billed.memo,originalDesc:firstRow.desc,
+      billedRowCount:billed.rows.length,billedSheet:firstRow.sName,
+      billedRowsDetail:billed.rows.map(r=>({rowIdx:r.i,sheet:r.sName,lineDate:formatLineDate(r.lineDate),itemId:r.itemId,qty:r.qty,price:r.price,memo:r.memo,desc:r.desc,shutdownNote:''})),
+      sampleCurrency,sampleLineDateRaw,
+      memoSummary:`Volume discount ${(pct*100).toFixed(2).replace(/\.?0+$/,'')}% recompute on adjusted base ($${newBase})`,
+      desc:'Volume Discount',
+      calc:`Stated ${(pct*100).toFixed(2).replace(/\.?0+$/,'')}% × new base $${newBase} = $${expectedDiscount} · billed $${billed.amount}`,
+      note:''
+    });
+  });
+
   // ── Tax recompute (HST 13% / VAT 16%) ────────────────────────────────────
   // When the underlying taxable items change (CU/MP/FR/AH/WP/shutdown-credit),
   // the existing 1053 (HST) or 1047 (VAT) rows on the prior pre-bill need a
-  // matching adjustment. We compute a per (cust × SA) aggregate retro.
+  // matching adjustment. Tax base is POST-DISCOUNT (sum of taxable - volume discount).
+  // We compute a per (cust × SA) aggregate retro.
   // Note: per CLAUDE.md the spec is "per SI_LINEITEM_DATE, never aggregated";
-  // initial impl is per (cust × SA) aggregate (consistent with how the other
-  // retros are computed). Per-week granularity is a future refinement.
+  // initial impl is per (cust × SA) aggregate. Per-week granularity is a future refinement.
   const TAXABLE_TYPES=['contracted-units','monthly-pricing','flat-rate','shutdown-credit','additional-hours','weekend-production'];
   const computeTaxBaseExpected=(cust,sa)=>{
     let total=0;
@@ -2809,6 +2874,14 @@ function buildRetroAdjustments(priorStart){
         total+=b.amount;
       }
     });
+    // Add volume discount (negative) for post-discount net. Use expected if the
+    // VD pass populated it; else fall back to billed VD (no change).
+    const expVD=((RECON.expectedSnapshot[cust]||{})[sa]||{})['volume-discount'];
+    if(expVD&&expVD.amount!=null){
+      total+=expVD.amount;
+    } else {
+      total+=getBilledTotal(RECON.billedSnapshot,cust,sa,'volume-discount').amount;
+    }
     return r2(total);
   };
   keys.forEach(key=>{
@@ -2892,7 +2965,8 @@ function renderReconStep3(custCount){
     'additional-hours':{l:'Additional Hours',i:'⏱'},
     'weekend-production':{l:'Weekend Production',i:'🗓'},
     'hst':{l:'HST 13% (Canadian)',i:'🧾'},
-    'vat':{l:'VAT 16% (Mexico E200)',i:'🧾'}
+    'vat':{l:'VAT 16% (Mexico E200)',i:'🧾'},
+    'volume-discount':{l:'Volume Discount',i:'📉'}
   };
 
   const sectionHtml=Object.entries(byType).map(([type,items])=>{
