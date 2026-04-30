@@ -375,8 +375,18 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.8';
+const APP_VERSION='1.7.9';
 const CHANGELOG=[
+  {
+    version:'1.7.9',
+    date:'2026-04-30',
+    changes:[
+      'Reconciliation now generates <b>HST</b> (1053, 13%) and <b>VAT</b> (1047, 16%) retros when the underlying taxable items change. The new tax base is computed from <code>expectedSnapshot</code> (falling back to billed for types DB_PRIOR doesn\'t have, so we never implicitly zero out billings the DB doesn\'t see). New tax = base × rate; retro = new tax − billed tax.',
+      'Step 3 now has <b>HST 13% (Canadian)</b> and <b>VAT 16% (Mexico E200)</b> sections. Retro MEMO reads <i>"HST 13% recompute on adjusted taxable base ($X)"</i> with the calculated base shown.',
+      'Known limitation: per CLAUDE.md the rule is "tax computed per <code>SI_LINEITEM_DATE</code>, never aggregated across the period." The initial impl is per (cust × SA) aggregate (consistent with how the other retros are computed). Per-week granularity is a future refinement, tracked in <code>docs/PROJECT_LOG.md</code>.',
+      'Coming next: <b>volume discount</b> recompute (v1.8.0) — when CU/MP/FR/AH/WP retros change the customer\'s billable total, the existing 1096 discount line needs adjusting based on the stated %.'
+    ]
+  },
   {
     version:'1.7.8',
     date:'2026-04-30',
@@ -2616,6 +2626,8 @@ function getBilledTotal(snap,cust,sa,type){
     case'shutdown-credit':return collect(['1005'],d=>d.includes('Shutdown Credit'));
     case'additional-hours':return collect(['1002']);
     case'weekend-production':return collect(['1003']);
+    case'hst':return collect(['1053']);
+    case'vat':return collect(['1047']);
     default:return{amount:0,memo:'',rows:[]};
   }
 }
@@ -2775,6 +2787,63 @@ function buildRetroAdjustments(priorStart){
       });
     });
   });
+
+  // ── Tax recompute (HST 13% / VAT 16%) ────────────────────────────────────
+  // When the underlying taxable items change (CU/MP/FR/AH/WP/shutdown-credit),
+  // the existing 1053 (HST) or 1047 (VAT) rows on the prior pre-bill need a
+  // matching adjustment. We compute a per (cust × SA) aggregate retro.
+  // Note: per CLAUDE.md the spec is "per SI_LINEITEM_DATE, never aggregated";
+  // initial impl is per (cust × SA) aggregate (consistent with how the other
+  // retros are computed). Per-week granularity is a future refinement.
+  const TAXABLE_TYPES=['contracted-units','monthly-pricing','flat-rate','shutdown-credit','additional-hours','weekend-production'];
+  const computeTaxBaseExpected=(cust,sa)=>{
+    let total=0;
+    TAXABLE_TYPES.forEach(t=>{
+      const exp=((RECON.expectedSnapshot[cust]||{})[sa]||{})[t];
+      if(exp&&exp.amount!=null){
+        total+=exp.amount;
+      } else {
+        // No expected for this type — assume billed is correct (no change).
+        // Otherwise we'd implicitly zero out billings DB_PRIOR doesn't see.
+        const b=getBilledTotal(RECON.billedSnapshot,cust,sa,t);
+        total+=b.amount;
+      }
+    });
+    return r2(total);
+  };
+  keys.forEach(key=>{
+    const[cust,sa]=key.split('|');
+    if(DB_PRIOR.marelliFlatZeroSAs.has(sa))return;
+    const expectedTaxBase=computeTaxBaseExpected(cust,sa);
+    [{type:'hst',rate:0.13,itemId:'1053',label:'HST 13%'},
+     {type:'vat',rate:0.16,itemId:'1047',label:'VAT 16%'}].forEach(({type,rate,itemId,label})=>{
+      const billed=getBilledTotal(RECON.billedSnapshot,cust,sa,type);
+      if(billed.amount<=0)return; // customer doesn't have this tax type at this SA
+      const expectedTax=r2(expectedTaxBase*rate);
+      const retroAmount=r2(expectedTax-billed.amount);
+      if(Math.abs(retroAmount)<0.01){if(billed.amount>0)matchCount++;return;}
+      const billedRows=billed.rows||[];
+      const firstRow=billedRows[0];
+      const sampleCurrency=firstRow?firstRow.currency:'';
+      const sampleLineDateRaw=firstRow?firstRow.lineDate:'';
+      out.push({
+        id:'retro-'+(++cid),custId:cust,sa,type,
+        itemId,
+        billed:billed.amount,expected:expectedTax,retroAmount,
+        decision:null,fixedAmount:null,
+        agreement:null,agreementNumber:'',priceType:'',
+        originalMemo:billed.memo,sampleMemo:billed.memo,originalDesc:firstRow?firstRow.desc:'',
+        billedRowCount:billedRows.length,billedSheet:firstRow?firstRow.sName:'',
+        billedRowsDetail:billedRows.map(r=>({rowIdx:r.i,sheet:r.sName,lineDate:formatLineDate(r.lineDate),itemId:r.itemId,qty:r.qty,price:r.price,memo:r.memo,desc:r.desc,shutdownNote:''})),
+        sampleCurrency,sampleLineDateRaw,
+        memoSummary:`${label} recompute on adjusted taxable base ($${expectedTaxBase})`,
+        desc:label,
+        calc:`Taxable base: billed $${r2(billed.amount/rate)} → expected $${expectedTaxBase} · tax ${(rate*100)}% · expected tax $${expectedTax}`,
+        note:''
+      });
+    });
+  });
+
   RECON.matchCount=matchCount;
   return out;
 }
@@ -2821,7 +2890,9 @@ function renderReconStep3(custCount){
     'flat-rate':{l:'Flat Rate',i:'💵'},
     'shutdown-credit':{l:'Shutdown Credits',i:'🏭'},
     'additional-hours':{l:'Additional Hours',i:'⏱'},
-    'weekend-production':{l:'Weekend Production',i:'🗓'}
+    'weekend-production':{l:'Weekend Production',i:'🗓'},
+    'hst':{l:'HST 13% (Canadian)',i:'🧾'},
+    'vat':{l:'VAT 16% (Mexico E200)',i:'🧾'}
   };
 
   const sectionHtml=Object.entries(byType).map(([type,items])=>{
