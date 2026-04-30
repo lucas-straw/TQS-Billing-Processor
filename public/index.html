@@ -375,8 +375,15 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.7.6';
+const APP_VERSION='1.7.7';
 const CHANGELOG=[
+  {
+    version:'1.7.7',
+    date:'2026-04-30',
+    changes:[
+      'Reconciliation Step 3: <i>Accept All</i> / <i>Skip All</i> (and section bulk actions) now visually flip the per-row checkmarks. Previously the underlying decisions were updated but the buttons re-rendered without the <code>act</code> highlight, leaving the user unsure whether the bulk action worked. The <b>Pending</b> KPI counter also now decrements correctly after bulk actions instead of staying at the total count until you click a row individually.'
+    ]
+  },
   {
     version:'1.7.6',
     date:'2026-04-30',
@@ -2820,9 +2827,9 @@ function renderReconStep3(custCount){
               <span style="color:${a.retroAmount<0?'var(--red)':'var(--green)'};font-weight:600">Retro: ${sign}$${a.retroAmount}</span>
             </div>
             <div class="apc" id="rapc-${a.id}">
-              <button class="ap ok" id="rok-${a.id}" onclick="radecide('${a.id}','accept')">✓</button>
-              <button class="ap fix" id="rfix-${a.id}" onclick="radecideFix('${a.id}')">Fix</button>
-              <button class="ap skip" id="rsk-${a.id}" onclick="radecide('${a.id}','skip')">—</button>
+              <button class="ap ok${a.decision==='accept'?' act':''}" id="rok-${a.id}" onclick="radecide('${a.id}','accept')">✓</button>
+              <button class="ap fix${a.decision==='fix'?' act':''}" id="rfix-${a.id}" onclick="radecideFix('${a.id}')">Fix</button>
+              <button class="ap skip${a.decision==='skip'?' act':''}" id="rsk-${a.id}" onclick="radecide('${a.id}','skip')">—</button>
             </div>
           </div>`;
         }).join('')}
@@ -2840,7 +2847,7 @@ function renderReconStep3(custCount){
           <div class="sc gc"><div class="sv">${addCount}</div><div class="sl2">Add Rows</div></div>
           <div class="sc ec"><div class="sv">${creditCount}</div><div class="sl2">Remove / Credit</div></div>
           <div class="sc bc"><div class="sv">${matchCount}</div><div class="sl2">Auto-Matched</div></div>
-          <div class="sc"><div class="sv" id="rPending">${adjs.length}</div><div class="sl2">Pending</div></div>
+          <div class="sc"><div class="sv" id="rPending">${adjs.filter(a=>a.decision===null).length}</div><div class="sl2">Pending</div></div>
         </div>
         <div style="font-size:11px;color:var(--t3);margin-bottom:10px;line-height:1.5">
           <b>Add Rows</b> = retros that increase a customer's invoice (e.g., approved AH/WP not on the prior pre-bill).

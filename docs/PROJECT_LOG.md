@@ -14,7 +14,8 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
-| v1.7.6 | 2026-04-30 | Case-insensitive column lookup in recon CSV gen (fixes empty MEMO on retro rows). Adds this PROJECT_LOG.md. | _pending merge_ |
+| v1.7.7 | 2026-04-30 | Step 3 bulk actions (Accept All / Skip All / section bulk) now visually flip the per-row buttons via the `act` class. Pending KPI counter now reflects live decision state. | _pending merge_ |
+| v1.7.6 | 2026-04-30 | Case-insensitive column lookup in recon CSV gen (fixes empty MEMO on retro rows). Adds PROJECT_LOG.md. | `7618091` |
 | v1.7.5 | 2026-04-30 | Per-retro prior-rows expandable detail (with shutdown overlap highlighting). Currency-neutral KPIs (counts, not mixed-$ totals). Auto-Matched counter as completeness signal. | `b7a93bd` |
 | v1.7.4 | 2026-04-30 | Hotfix: unhide `#rs4` Step 4 card so Generate Augmented CSVs button produces visible output. | `cbbe975` |
 | v1.7.3 | 2026-04-29 | Diagnostic surfaces extracted-but-unmatched MEMO agreement number with likely causes. | `b7a6249` |
