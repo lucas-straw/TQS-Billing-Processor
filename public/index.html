@@ -334,21 +334,36 @@
   </div>
 
   <div class="card">
-    <div class="ch"><div class="cn">2</div><div class="ct">Upload Pre-Bill Files</div><div class="cd">Both files in XLSX format · same export shape as Items A/B</div></div>
+    <div class="ch"><div class="cn">2</div><div class="ct">Upload Files</div><div class="cd">All four files: same XLSX export shape · same as Items A/B</div></div>
     <div class="cb">
-      <div class="ug">
-        <label class="us" id="rsl-prior" ondragover="rdv(event,'prior')" ondragleave="rdl('prior')" ondrop="rdd(event,'prior')">
-          <div class="sl">PRIOR PRE-BILL</div>
-          <div class="si">📄</div>
-          <div class="sno" id="rsn-prior">Drop the saved pre-bill from prior month here, or click to browse</div>
-          <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'prior')"/>
-        </label>
+      <div class="ug" style="grid-template-columns:repeat(2,1fr);gap:10px">
         <label class="us" id="rsl-new" ondragover="rdv(event,'new')" ondragleave="rdl('new')" ondrop="rdd(event,'new')">
-          <div class="sl">NEW PRE-BILL</div>
+          <div class="sl">1 · NEW PRE-BILL</div>
           <div class="si">📄</div>
-          <div class="sno" id="rsn-new">Drop the freshly downloaded next-month pre-bill here, or click to browse</div>
+          <div class="sno" id="rsn-new">Upcoming month\'s pre-bill (the file we augment + export)</div>
           <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'new')"/>
         </label>
+        <label class="us" id="rsl-adjustmentReport" ondragover="rdv(event,'adjustmentReport')" ondragleave="rdl('adjustmentReport')" ondrop="rdd(event,'adjustmentReport')">
+          <div class="sl">3 · ADJUSTMENT REPORT</div>
+          <div class="si">📋</div>
+          <div class="sno" id="rsn-adjustmentReport">Qnet\'s pre-billing adjustment report for prior month (primary retro source)</div>
+          <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'adjustmentReport')"/>
+        </label>
+        <label class="us" id="rsl-priorReDownload" ondragover="rdv(event,'priorReDownload')" ondragleave="rdl('priorReDownload')" ondrop="rdd(event,'priorReDownload')">
+          <div class="sl">2 · PRIOR PRE-BILL (re-downloaded today)</div>
+          <div class="si">🔄</div>
+          <div class="sno" id="rsn-priorReDownload">Prior month\'s pre-bill, freshly re-downloaded today (what billing should have been)</div>
+          <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'priorReDownload')"/>
+        </label>
+        <label class="us" id="rsl-priorOriginal" ondragover="rdv(event,'priorOriginal')" ondragleave="rdl('priorOriginal')" ondrop="rdd(event,'priorOriginal')">
+          <div class="sl">4 · PRIOR PRE-BILL (originally invoiced)</div>
+          <div class="si">📂</div>
+          <div class="sno" id="rsn-priorOriginal">Prior month\'s pre-bill from the start of the month (what was actually invoiced)</div>
+          <input type="file" accept=".xlsx,.xls" onchange="rlf(event.target.files[0],'priorOriginal')"/>
+        </label>
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-top:10px;line-height:1.5">
+        File 3 is the primary retro source. Files 2 and 4 are diffed against each other and any item not covered by file 3 is surfaced as a <b>Missed by adjustment report</b> retro — a safety net in case Qnet\'s adjustment report misses anything (commonly: shutdown / contracted-units edge cases).
       </div>
       <div id="rfsum" style="margin-top:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--t2)"></div>
       <div class="btn-row" style="margin-top:14px" id="r2act">
@@ -375,8 +390,20 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.8.0';
+const APP_VERSION='1.9.0';
 const CHANGELOG=[
+  {
+    version:'1.9.0',
+    date:'2026-05-01',
+    changes:[
+      'Pre-Bill Reconciliation pivots to a <b>file-driven</b> flow. Lucas confirmed Qnet already produces a pre-billing adjustment report — there\'s no reason to recompute the same retros from DB queries. The tab now takes <b>four files</b>: (1) new pre-bill, (3) adjustment report, (2) prior pre-bill re-downloaded today, (4) prior pre-bill from when it was originally invoiced.',
+      'Primary retro source is the <b>adjustment report</b> — its rows feed directly into Step 3 with the badge <i>"ADJUSTMENT REPORT"</i>.',
+      'Safety net: the tool diffs <b>files #2 vs #4</b> per (customer × SA × ITEMID) and matches against the AR. Anything in the diff not covered by AR is surfaced with the badge <i>"⚠ MISSED BY AR"</i>. Catches anything Qnet\'s adjustment report might have missed (commonly: shutdown / contracted-units edge cases).',
+      'No more DB_PRIOR queries from this tab — n8n Queries 5/6/7 are no longer required for the recon flow. (The Month-End tab is unaffected; those queries can stay or be retired separately.)',
+      'Step 3 review (Accept/Fix/Skip), Step 4 augmented CSV gen, MEMO wrapping with <code>Retro-Change [Mon YYYY]: ...</code>, CURRENCY/SI_LINEITEM_DATE pull-through — all reused unchanged.',
+      'Old DB-query path (loadDBPrior, buildExpectedSnapshot, buildRetroAdjustments) is no longer called but left in the source for this release. v1.9.1 cleanup will remove it.'
+    ]
+  },
   {
     version:'1.8.0',
     date:'2026-04-30',
@@ -557,14 +584,19 @@ let DB=makeDBState();
 // doesn't clobber the current-period DB state used by the Month-End flow.
 let DB_PRIOR=makeDBState();
 
-// Reconciliation tab state — parallel to the Month-End flow. Populated by
-// rlf() (file upload), reconcile() (build snapshots), and the retro CSV gen.
+// Reconciliation tab state — 4-file flow (v1.9.0+). The adjustment report (#3)
+// from Qnet provides primary retros; #2 vs #4 diff catches anything missed.
 const RECON={
+  newPreBill:{wb:null,fn:''},          // #1: May pre-bill (the file we augment)
+  priorReDownload:{wb:null,fn:''},      // #2: April pre-bill re-downloaded today (current state)
+  adjustmentReport:{wb:null,fn:''},     // #3: Qnet's pre-computed adjustment report (primary retros)
+  priorOriginal:{wb:null,fn:''},        // #4: April pre-bill from April 1st (what was actually billed)
+  // Legacy fields (kept for back-compat with any not-yet-cleaned helpers; will
+  // be removed in v1.9.1 once the dead DB-query path is gone).
   priorPreBill:{wb:null,fn:''},
-  newPreBill:{wb:null,fn:''},
-  billedSnapshot:{},     // { custId: { sa: { byItem:{itemId:[{...}]}, totals:{...} } } }
-  expectedSnapshot:{},   // populated in Phase 2
-  retroAdjustments:[],   // populated in Phase 2
+  billedSnapshot:{},
+  expectedSnapshot:{},
+  retroAdjustments:[],
   csvData:{},
   log:[]
 };
@@ -2246,16 +2278,34 @@ function setReconDBStatus(type,text){
 function rdv(e,k){e.preventDefault();document.getElementById('rsl-'+k).classList.add('dov');}
 function rdl(k){document.getElementById('rsl-'+k).classList.remove('dov');}
 function rdd(e,k){e.preventDefault();rdl(k);const f=e.dataTransfer.files[0];if(f)rlf(f,k);}
+// Maps the upload-slot key to the RECON.* state field name.
+const RECON_SLOTS={
+  new:'newPreBill',
+  adjustmentReport:'adjustmentReport',
+  priorReDownload:'priorReDownload',
+  priorOriginal:'priorOriginal',
+  // Legacy alias kept so any straggling reference doesn't crash; v1.9.1 cleanup will remove.
+  prior:'priorReDownload'
+};
+const RECON_LABELS={
+  newPreBill:'New pre-bill',
+  adjustmentReport:'Adjustment report',
+  priorReDownload:'Prior pre-bill (re-downloaded today)',
+  priorOriginal:'Prior pre-bill (originally invoiced)'
+};
+
 function rlf(file,key){
   if(!file)return;
-  const slot=key==='prior'?'priorPreBill':'newPreBill';
+  const slot=RECON_SLOTS[key]||key;
+  if(!RECON[slot])return;
   RECON[slot].fn=file.name.replace(/\.xlsx?$/i,'');
   const r=new FileReader();
   r.onload=e=>{
     RECON[slot].wb=XLSX.read(e.target.result,{type:'array',cellDates:false,raw:true});
-    document.getElementById('rsl-'+key).classList.add('ld');
-    document.getElementById('rsn-'+key).className='sok';
-    document.getElementById('rsn-'+key).textContent='✓ '+file.name;
+    const slotEl=document.getElementById('rsl-'+key);
+    const noteEl=document.getElementById('rsn-'+key);
+    if(slotEl)slotEl.classList.add('ld');
+    if(noteEl){noteEl.className='sok';noteEl.textContent='✓ '+file.name;}
     renderReconFileSummary();
     checkReconReadiness();
   };
@@ -2265,9 +2315,11 @@ function rlf(file,key){
 function renderReconFileSummary(){
   const sum=document.getElementById('rfsum');if(!sum)return;
   const lines=[];
-  if(RECON.priorPreBill.wb)lines.push(`Prior pre-bill: ${RECON.priorPreBill.fn} · ${RECON.priorPreBill.wb.SheetNames.length} sheet${RECON.priorPreBill.wb.SheetNames.length!==1?'s':''}`);
-  if(RECON.newPreBill.wb)lines.push(`New pre-bill: ${RECON.newPreBill.fn} · ${RECON.newPreBill.wb.SheetNames.length} sheet${RECON.newPreBill.wb.SheetNames.length!==1?'s':''}`);
-  sum.textContent=lines.join('  ·  ');
+  ['newPreBill','adjustmentReport','priorReDownload','priorOriginal'].forEach(slot=>{
+    const s=RECON[slot];
+    if(s&&s.wb)lines.push(`${RECON_LABELS[slot]}: ${s.fn} · ${s.wb.SheetNames.length} sheet${s.wb.SheetNames.length!==1?'s':''}`);
+  });
+  sum.innerHTML=lines.map(l=>'· '+l).join('<br/>');
 }
 
 function checkReconReadiness(){
@@ -2278,8 +2330,10 @@ function checkReconReadiness(){
   if(!document.getElementById('rPriorStart').value||!document.getElementById('rPriorEnd').value) missing.push('prior period');
   if(!document.getElementById('rNewStart').value||!document.getElementById('rNewEnd').value) missing.push('new period');
   if(!document.getElementById('rNewInv').value) missing.push('new pre-bill invoice date');
-  if(!RECON.priorPreBill.wb) missing.push('prior pre-bill file');
-  if(!RECON.newPreBill.wb) missing.push('new pre-bill file');
+  if(!RECON.newPreBill.wb) missing.push('new pre-bill (file 1)');
+  if(!RECON.adjustmentReport.wb) missing.push('adjustment report (file 3)');
+  if(!RECON.priorReDownload.wb) missing.push('prior pre-bill re-download (file 2)');
+  if(!RECON.priorOriginal.wb) missing.push('prior pre-bill original (file 4)');
   btn.disabled=missing.length>0;
   if(note)note.textContent=missing.length?'Still needed: '+missing.join(', '):'';
 }
@@ -2379,24 +2433,218 @@ async function loadDBPrior(pStart,pEnd){
 // Phase 1 reconcile orchestrator: builds billedSnapshot, loads DB_PRIOR, then
 // renders a Step 3 stub. Phases 2+3 will plug expectedSnapshot + retro diff
 // into this function before rendering.
+// Parse the adjustment-report workbook into retro entries ready for Step 3 + 4.
+// Each row in the AR becomes a retro entry. ITEMID drives the type label.
+function parseAdjustmentReportRows(wb){
+  if(!wb)return[];
+  const out=[];
+  const periodLabel=formatRetroPeriod(document.getElementById('rPriorStart').value);
+  wb.SheetNames.forEach(sName=>{
+    const ws=wb.Sheets[sName];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(rows.length<2)return;
+    const hdr=rows[0];
+    const ci=(n)=>ciFind(hdr,n);
+    const cF=ci('CUSTOMER_ID'),cI=ci('ITEMID'),cQ=ci('QUANTITY'),cP=ci('PRICE');
+    const cClass=ci('SODOCUMENTENTRY_CLASSID'),cDesc=ci('ITEMDESC');
+    const cMemo=ci('MEMO'),cLineDate=ci('SI_LINEITEM_DATE'),cCurr=ci('CURRENCY');
+    if(cI===-1||cP===-1)return;
+    let cust='';
+    rows.forEach((row,i)=>{
+      if(i===0)return;
+      if(row[cF]&&row[cF]!=='')cust=String(row[cF]).trim();
+      const sa=cClass!==-1?String(row[cClass]||'').trim():'';
+      const itemId=String(row[cI]||'').trim();
+      if(!cust||!itemId)return;
+      const qty=parseFloat(row[cQ])||0;
+      const price=parseFloat(row[cP])||0;
+      // Skip pure header/structural rows (zero qty AND zero price)
+      if(qty===0&&price===0)return;
+      const desc=cDesc!==-1?String(row[cDesc]||''):'';
+      const memo=cMemo!==-1?String(row[cMemo]||''):'';
+      const lineDate=cLineDate!==-1?row[cLineDate]:'';
+      const currency=cCurr!==-1?String(row[cCurr]||''):'';
+      // Per item-id: amount = price for non-1001/1002/1003, qty*price for those.
+      const lineAmount=['1001','1002','1003'].includes(itemId)?qty*price:price;
+      out.push({
+        id:'retro-ar-'+(++cid),custId:cust,sa,
+        type:itemIdToRetroType(itemId,desc),
+        itemId,
+        billed:0,expected:r2(lineAmount),retroAmount:r2(lineAmount),
+        decision:null,fixedAmount:null,
+        agreement:null,agreementNumber:'',priceType:'',
+        originalMemo:memo,sampleMemo:memo,originalDesc:desc,
+        billedRowCount:1,billedSheet:sName,
+        billedRowsDetail:[{
+          rowIdx:i,sheet:sName,lineDate:formatLineDate(lineDate),
+          itemId,qty,price,memo,desc,shutdownNote:''
+        }],
+        sampleCurrency:currency,sampleLineDateRaw:lineDate,
+        memoSummary:memo||`${itemIdToRetroType(itemId,desc).replace(/-/g,' ')} adjustment from Qnet adjustment report`,
+        desc:itemIdToRetroLabel(itemId,desc),
+        calc:`From adjustment report row ${i} on sheet ${sName} · ${desc||'(no desc)'} · qty ${qty} × $${price} = $${r2(lineAmount)}`,
+        note:''
+      });
+    });
+  });
+  return out;
+}
+
+// Maps ITEMID + ITEMDESC to a retro type slug for grouping in Step 3.
+function itemIdToRetroType(itemId,desc){
+  switch(String(itemId).trim()){
+    case'1001':return'contracted-units';
+    case'1002':return'additional-hours';
+    case'1003':return'weekend-production';
+    case'1005':
+      if(/Shutdown/i.test(desc))return'shutdown-credit';
+      if(/Monthly Pricing/i.test(desc))return'monthly-pricing';
+      return'flat-rate';
+    case'1053':return'hst';
+    case'1047':return'vat';
+    case'1096':return'volume-discount';
+    default:return'other';
+  }
+}
+function itemIdToRetroLabel(itemId,desc){
+  return({
+    'contracted-units':'Contracted Units','additional-hours':'Additional Hours','weekend-production':'Weekend Production',
+    'shutdown-credit':'Shutdown Credit','monthly-pricing':'Monthly Pricing','flat-rate':'Flat Rate',
+    'hst':'HST 13%','vat':'VAT 16%','volume-discount':'Volume Discount','other':'Other (ITEMID '+itemId+')'
+  })[itemIdToRetroType(itemId,desc)];
+}
+
+// Sums (cust × SA × ITEMID) totals from a pre-bill workbook. Used for the
+// #2 vs #4 diff so we can compare what April should-have-been vs what April
+// was-actually-billed and catch anything the adjustment report missed.
+function parsePerCustSAItemTotals(wb){
+  const totals={}; // {custId: {sa: {itemId: {amount, count, sampleRow}}}}
+  if(!wb)return totals;
+  wb.SheetNames.forEach(sName=>{
+    const ws=wb.Sheets[sName];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    if(rows.length<2)return;
+    const hdr=rows[0];
+    const ci=(n)=>ciFind(hdr,n);
+    const cF=ci('CUSTOMER_ID'),cI=ci('ITEMID'),cQ=ci('QUANTITY'),cP=ci('PRICE');
+    const cClass=ci('SODOCUMENTENTRY_CLASSID'),cDesc=ci('ITEMDESC');
+    const cMemo=ci('MEMO'),cLineDate=ci('SI_LINEITEM_DATE'),cCurr=ci('CURRENCY');
+    if(cI===-1||cP===-1)return;
+    let cust='';
+    rows.forEach((row,i)=>{
+      if(i===0)return;
+      if(row[cF]&&row[cF]!=='')cust=String(row[cF]).trim();
+      const sa=cClass!==-1?String(row[cClass]||'').trim():'';
+      const itemId=String(row[cI]||'').trim();
+      if(!cust||!sa||!itemId)return;
+      const qty=parseFloat(row[cQ])||0;
+      const price=parseFloat(row[cP])||0;
+      const lineAmount=['1001','1002','1003'].includes(itemId)?qty*price:price;
+      totals[cust]=totals[cust]||{};
+      totals[cust][sa]=totals[cust][sa]||{};
+      const t=totals[cust][sa][itemId]=totals[cust][sa][itemId]||{amount:0,count:0,sampleRow:null,sampleSheet:sName};
+      t.amount+=lineAmount;t.count++;
+      if(!t.sampleRow){
+        const desc=cDesc!==-1?String(row[cDesc]||''):'';
+        const memo=cMemo!==-1?String(row[cMemo]||''):'';
+        const lineDate=cLineDate!==-1?row[cLineDate]:'';
+        const currency=cCurr!==-1?String(row[cCurr]||''):'';
+        t.sampleRow={rowIdx:i,sheet:sName,desc,memo,lineDate,currency};
+      }
+    });
+  });
+  return totals;
+}
+
+// #2 - #4 = retro that should have been issued. Returns a flat list of diff
+// entries keyed by (cust × SA × ITEMID). Items where amounts match (within
+// $0.01) are skipped — they didn't change between the two snapshots.
+function computePriorPeriodDiff(reTotals,origTotals){
+  const diff=[];
+  const allKeys=new Set();
+  Object.entries(reTotals).forEach(([c,sas])=>Object.entries(sas).forEach(([sa,items])=>Object.keys(items).forEach(item=>allKeys.add(c+'|'+sa+'|'+item))));
+  Object.entries(origTotals).forEach(([c,sas])=>Object.entries(sas).forEach(([sa,items])=>Object.keys(items).forEach(item=>allKeys.add(c+'|'+sa+'|'+item))));
+  allKeys.forEach(k=>{
+    const[cust,sa,itemId]=k.split('|');
+    const re=((reTotals[cust]||{})[sa]||{})[itemId]||{amount:0,count:0,sampleRow:null};
+    const orig=((origTotals[cust]||{})[sa]||{})[itemId]||{amount:0,count:0,sampleRow:null};
+    const delta=r2(re.amount-orig.amount);
+    if(Math.abs(delta)<0.01)return;
+    diff.push({
+      custId:cust,sa,itemId,
+      reAmount:r2(re.amount),origAmount:r2(orig.amount),delta,
+      reSampleRow:re.sampleRow,origSampleRow:orig.sampleRow,
+      sheet:(re.sampleRow&&re.sampleRow.sheet)||(orig.sampleRow&&orig.sampleRow.sheet)||''
+    });
+  });
+  return diff;
+}
+
+// For each diff entry, check if the AR has matching rows that net out to the
+// same delta (within $0.01). Anything not covered is "missed by AR" and gets
+// surfaced as a retro the reviewer can accept.
+function findMissedByAdjustmentReport(diff,arRows,priorOriginalWB){
+  const missed=[];
+  // Build AR totals per (cust × SA × ITEMID)
+  const arTotals={};
+  arRows.forEach(r=>{
+    const k=r.custId+'|'+r.sa+'|'+r.itemId;
+    arTotals[k]=(arTotals[k]||0)+r.retroAmount;
+  });
+  diff.forEach(d=>{
+    const k=d.custId+'|'+d.sa+'|'+d.itemId;
+    const arNet=r2(arTotals[k]||0);
+    if(Math.abs(arNet-d.delta)<0.01)return; // covered by AR
+    // Not covered: surface the gap.
+    const gap=r2(d.delta-arNet);
+    const desc=(d.reSampleRow&&d.reSampleRow.desc)||(d.origSampleRow&&d.origSampleRow.desc)||'';
+    const memo=(d.reSampleRow&&d.reSampleRow.memo)||(d.origSampleRow&&d.origSampleRow.memo)||'';
+    const currency=(d.reSampleRow&&d.reSampleRow.currency)||(d.origSampleRow&&d.origSampleRow.currency)||'';
+    const lineDate=(d.reSampleRow&&d.reSampleRow.lineDate)||(d.origSampleRow&&d.origSampleRow.lineDate)||'';
+    const sheet=d.sheet;
+    missed.push({
+      id:'retro-missed-'+(++cid),custId:d.custId,sa:d.sa,
+      type:itemIdToRetroType(d.itemId,desc),
+      itemId:d.itemId,
+      billed:d.origAmount,expected:d.reAmount,retroAmount:gap,
+      decision:null,fixedAmount:null,
+      agreement:null,agreementNumber:'',priceType:'',
+      originalMemo:memo,sampleMemo:memo,originalDesc:desc,
+      billedRowCount:0,billedSheet:sheet,
+      billedRowsDetail:[],
+      sampleCurrency:currency,sampleLineDateRaw:lineDate,
+      memoSummary:`Missed by AR — diff between prior re-download (#2) and original (#4) is $${gap}, AR covers $${arNet}`,
+      desc:itemIdToRetroLabel(d.itemId,desc),
+      calc:`File #2 total $${d.reAmount} − File #4 total $${d.origAmount} = $${d.delta}; AR covers $${arNet}; gap $${gap}`,
+      note:'Adjustment report did not include this delta. Verify in Qnet.'
+    });
+  });
+  return missed;
+}
+
 async function reconcile(){
-  const priorStart=document.getElementById('rPriorStart').value;
-  const priorEnd=document.getElementById('rPriorEnd').value;
   const btn=document.getElementById('reconBtn');
   const note=document.getElementById('reconNote');
   if(btn)btn.disabled=true;
-  if(note)note.textContent='⏳ Building snapshot...';
+  if(note)note.textContent='⏳ Building retro list from adjustment report and prior-period diff...';
 
-  RECON.billedSnapshot=buildBilledSnapshot(RECON.priorPreBill.wb);
-  const custCount=Object.keys(RECON.billedSnapshot).length;
-
-  if(!DB_PRIOR.connected||DB_PRIOR.loadedForPeriod!==priorStart+':'+priorEnd){
-    await loadDBPrior(priorStart,priorEnd);
-  }
-
-  // Build expectedSnapshot from DB_PRIOR + retroAdjustments diff
-  RECON.expectedSnapshot=buildExpectedSnapshot(priorStart,priorEnd);
-  RECON.retroAdjustments=buildRetroAdjustments(priorStart);
+  // 1. Parse adjustment report rows directly (these are already retro-ready).
+  const arRows=parseAdjustmentReportRows(RECON.adjustmentReport.wb);
+  // 2. Parse #2 and #4 totals per (cust × SA × ITEMID), compute diff.
+  const reTotals=parsePerCustSAItemTotals(RECON.priorReDownload.wb);
+  const origTotals=parsePerCustSAItemTotals(RECON.priorOriginal.wb);
+  const diffTotals=computePriorPeriodDiff(reTotals,origTotals);
+  // 3. Match each diff entry against the AR. Anything unmatched is "missed".
+  const missedRows=findMissedByAdjustmentReport(diffTotals,arRows,RECON.priorOriginal.wb);
+  // 4. Combine into a single review list.
+  RECON.retroAdjustments=[
+    ...arRows.map(r=>({...r,source:'adjustment-report'})),
+    ...missedRows.map(r=>({...r,source:'missed-by-ar'}))
+  ];
+  // Fill in matchCount as how many (cust × SA × ITEMID) keys diffed but were already in the AR.
+  RECON.matchCount=Object.keys(diffTotals).length-missedRows.length;
+  // For backward compat with renderReconStep3's customer-count banner:
+  const custCount=new Set(RECON.retroAdjustments.map(r=>r.custId)).size;
 
   if(note)note.textContent='';
   if(btn)btn.disabled=false;
@@ -2985,12 +3233,18 @@ function renderReconStep3(custCount){
         ${items.map(a=>{
           const sign=a.retroAmount>=0?'+':'';
           const escapeHtml=(s)=>String(s||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch]);
+          const sourceBadge=a.source==='missed-by-ar'
+            ? '<span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:rgba(184,122,0,.15);color:var(--amber)">⚠ MISSED BY AR</span>'
+            : a.source==='adjustment-report'
+              ? '<span style="display:inline-block;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;background:rgba(47,108,200,.12);color:var(--blue)">ADJUSTMENT REPORT</span>'
+              : '';
           return`<div class="chrow" id="rac-${a.id}">
-            <div class="cc" style="flex-direction:column;align-items:flex-start;gap:1px">
+            <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
               <span style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--red)">${a.custId}</span>
               <span style="font-size:10px;color:var(--t3)">${a.sa}${a.billedSheet?' · '+a.billedSheet:''}</span>
               ${a.agreementNumber?`<span style="font-size:10px;color:var(--t3)">R${a.agreementNumber}${a.priceType?' · '+escapeHtml(a.priceType):''}</span>`:''}
               ${a.billedRowCount?`<span style="font-size:10px;color:var(--t3)">${a.billedRowCount} prior row${a.billedRowCount!==1?'s':''}</span>`:''}
+              ${sourceBadge}
             </div>
             <div class="cc" style="flex-direction:column;align-items:flex-start;gap:2px">
               <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t2)">${escapeHtml(a.calc)}</span>

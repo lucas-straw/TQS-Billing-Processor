@@ -14,7 +14,8 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
-| v1.8.0 | 2026-04-30 | Volume discount (1096) recompute when CU/AH/WP retros change the base. HST/VAT now use post-discount net (matches existing Month-End audit). Closes Lucas's feedback loop. | _pending merge_ |
+| v1.9.0 | 2026-05-01 | **Major pivot:** reconciliation is now file-driven (4 files). Adjustment report is primary retro source; #2 vs #4 diff catches anything missed. No DB queries from this tab. Old DB-query path left in source pending v1.9.1 cleanup. | _pending merge_ |
+| v1.8.0 | 2026-04-30 | Volume discount (1096) recompute when CU/AH/WP retros change the base. HST/VAT now use post-discount net (matches existing Month-End audit). | `a1bdb72` |
 | v1.7.9 | 2026-04-30 | HST (1053) and VAT (1047) retros on adjusted taxable base. Per (cust × SA) aggregate. | `396181a` |
 | v1.7.8 | 2026-04-30 | Retro rows now populate CURRENCY and SI_LINEITEM_DATE; MEMO is self-explanatory with shutdown dates / AH+WP counts inlined. | `b6c86d6` |
 | v1.7.7 | 2026-04-30 | Step 3 bulk actions visually flip per-row buttons + live Pending counter. | `f74c6b4` |
