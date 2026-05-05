@@ -175,6 +175,28 @@
   .recon-empty{background:var(--s2);border:1px dashed var(--bd);border-radius:8px;padding:30px 20px;text-align:center;font-size:13px;color:var(--t2)}
   .recon-empty b{color:var(--text);font-weight:600}
 
+  /* ── TQS SHARED SIDEBAR LAYOUT ────────────────────────────────────────── */
+  #tabMonthEnd,#tabRecon{display:flex;flex-direction:column}
+  .tqs-layout{display:flex;height:calc(100vh - 100px);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  .tqs-sidebar{width:240px;background:#212322;color:#C4C6C8;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+  .tqs-sb-hdr{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .tqs-sb-title{color:#FEDD00;font-weight:600;font-size:14px;line-height:1.3}
+  .tqs-sb-sub{font-size:11px;color:#6A747C;margin-top:3px}
+  .tqs-sb-nav{flex:1;padding:12px 0}
+  .tqs-sb-step{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;font-size:13px;color:#6A747C;transition:color .15s,background .15s;user-select:none}
+  .tqs-sb-step:hover{background:rgba(255,255,255,.04);color:#C4C6C8}
+  .tqs-sb-step.active{color:#FEDD00}
+  .tqs-sb-step.done{color:#10b981}
+  .tqs-sb-circle{width:28px;height:28px;border-radius:50%;border:2px solid #3a3d3a;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;color:#6A747C;transition:all .2s;position:relative;overflow:hidden}
+  .tqs-sb-step.active .tqs-sb-circle{background:#FEDD00;border-color:#FEDD00;color:#212322}
+  .tqs-sb-step.done .tqs-sb-circle{background:#FEDD00;border-color:#FEDD00;color:#212322;font-size:0}
+  .tqs-sb-step.done .tqs-sb-circle::after{content:'✓';font-size:13px;color:#212322}
+  .tqs-sb-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#4a5568;line-height:1.6}
+  .tqs-main{flex:1;display:flex;flex-direction:column;background:#f5f6f5;overflow:hidden;min-width:0}
+  .tqs-main-hdr{background:#fff;border-bottom:1px solid #e2e4e2;padding:20px 32px;font-size:15px;font-weight:600;color:#1a1714;flex-shrink:0}
+  .tqs-content{flex:1;overflow-y:auto}
+  @media(max-width:900px){.tqs-sidebar{width:60px}.tqs-sb-hdr,.tqs-sb-footer,.tqs-sb-step span{display:none}.tqs-sb-step{justify-content:center;padding:10px}}
+
   /* ── BOSCH BUNDLE ASSEMBLER — scoped styles ─────────────────────────── */
   #tabBosch{display:flex;flex-direction:column}
   #tabBosch .bosch-layout{display:flex;height:calc(100vh - 100px);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
@@ -330,13 +352,36 @@
   <button class="tab-btn" data-tab="Bosch" onclick="switchTab('Bosch')">📦 Bosch Bundle Assembler</button>
 </div>
 <div id="tabMonthEnd" class="tab-pane">
-<div class="steps" id="steps">
-  <div class="stp active" id="st1"><div class="stp-n">1</div>Dates &amp; Period</div>
-  <div class="stp" id="st2"><div class="stp-n">2</div>Upload Files</div>
-  <div class="stp" id="st3"><div class="stp-n">3</div>Review Decisions</div>
-  <div class="stp" id="st4"><div class="stp-n">4</div>Generate &amp; Download</div>
-  <div class="stp" id="st5"><div class="stp-n">5</div>Audit Report</div>
-</div>
+<div class="tqs-layout">
+  <aside class="tqs-sidebar">
+    <div class="tqs-sb-hdr">
+      <div class="tqs-sb-title">Month-End Invoicing</div>
+      <div class="tqs-sb-sub">Team Quality Services</div>
+    </div>
+    <nav class="tqs-sb-nav">
+      <div class="tqs-sb-step active" id="st1" data-step="1">
+        <div class="tqs-sb-circle">1</div><span>Dates &amp; Period</span>
+      </div>
+      <div class="tqs-sb-step" id="st2" data-step="2">
+        <div class="tqs-sb-circle">2</div><span>Upload Files</span>
+      </div>
+      <div class="tqs-sb-step" id="st3" data-step="3">
+        <div class="tqs-sb-circle">3</div><span>Review Decisions</span>
+      </div>
+      <div class="tqs-sb-step" id="st4" data-step="4">
+        <div class="tqs-sb-circle">4</div><span>Generate &amp; Download</span>
+      </div>
+      <div class="tqs-sb-step" id="st5" data-step="5">
+        <div class="tqs-sb-circle">5</div><span>Audit Report</span>
+      </div>
+    </nav>
+    <div class="tqs-sb-footer">
+      <div>TQS Billing Processor</div>
+    </div>
+  </aside>
+  <main class="tqs-main">
+    <div class="tqs-main-hdr" id="meMainHdr">Step 1: Dates &amp; Period</div>
+    <div class="tqs-content">
 <div id="rulesBanner" style="background:#1a1714;border-bottom:1px solid #333;padding:10px 32px;display:flex;align-items:center;gap:12px;font-size:12px;color:#999">
   <span style="font-size:14px">📋</span>
   <span id="rulesStatus">Checking billing rules against Confluence...</span>
@@ -438,15 +483,39 @@
 </div>
 <div id="s5" class="hidden"></div>
 </div>
+    </div><!-- /.tqs-content -->
+  </main>
+</div><!-- /.tqs-layout -->
 </div><!-- /#tabMonthEnd -->
 
 <div id="tabRecon" class="tab-pane hidden">
-<div class="steps" id="stepsRecon">
-  <div class="stp active" id="rst1"><div class="stp-n">1</div>Periods &amp; Dates</div>
-  <div class="stp" id="rst2"><div class="stp-n">2</div>Upload Files</div>
-  <div class="stp" id="rst3"><div class="stp-n">3</div>Review Retro Changes</div>
-  <div class="stp" id="rst4"><div class="stp-n">4</div>Generate &amp; Export</div>
-</div>
+<div class="tqs-layout">
+  <aside class="tqs-sidebar">
+    <div class="tqs-sb-hdr">
+      <div class="tqs-sb-title">Pre-Bill Reconciliation</div>
+      <div class="tqs-sb-sub">Team Quality Services</div>
+    </div>
+    <nav class="tqs-sb-nav">
+      <div class="tqs-sb-step active" id="rst1" data-step="1">
+        <div class="tqs-sb-circle">1</div><span>Periods &amp; Dates</span>
+      </div>
+      <div class="tqs-sb-step" id="rst2" data-step="2">
+        <div class="tqs-sb-circle">2</div><span>Upload Files</span>
+      </div>
+      <div class="tqs-sb-step" id="rst3" data-step="3">
+        <div class="tqs-sb-circle">3</div><span>Review Retro Changes</span>
+      </div>
+      <div class="tqs-sb-step" id="rst4" data-step="4">
+        <div class="tqs-sb-circle">4</div><span>Generate &amp; Export</span>
+      </div>
+    </nav>
+    <div class="tqs-sb-footer">
+      <div>TQS Billing Processor</div>
+    </div>
+  </aside>
+  <main class="tqs-main">
+    <div class="tqs-main-hdr" id="reconMainHdr">Step 1: Periods &amp; Dates</div>
+    <div class="tqs-content">
 <div class="wrap">
   <div class="card">
     <div class="ch"><div class="cn">1</div><div class="ct">Periods &amp; Dates</div><div class="cd">Prior period being reconciled · New pre-bill period being augmented</div></div>
@@ -522,6 +591,9 @@
     </div>
   </div>
 </div>
+    </div><!-- /.tqs-content -->
+  </main>
+</div><!-- /.tqs-layout -->
 </div><!-- /#tabRecon -->
 
 <!-- ── BOSCH BUNDLE ASSEMBLER TAB ─────────────────────────────────────── -->
@@ -812,8 +884,30 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='1.9.0';
+const APP_VERSION='2.1.0';
 const CHANGELOG=[
+  {
+    version:'2.1.0',
+    date:'2026-05-05',
+    changes:[
+      'Applied TQS sidebar branding to <b>Month-End Invoicing</b> and <b>Pre-Bill Reconciliation</b> tabs — both now use the same dark sidebar (#212322) with yellow (#FEDD00) step indicators, matching the Bosch Bundle Assembler layout introduced in v2.0.0.',
+      'Step navigation sidebar shows active/done/idle states per step; step header updates dynamically as steps progress.',
+      'Shared <code>.tqs-*</code> CSS class set introduced — sidebar layout is now a reusable pattern across all three tabs.'
+    ]
+  },
+  {
+    version:'2.0.0',
+    date:'2026-05-05',
+    changes:[
+      'Added <b>Bosch Bundle Assembler</b> tab — a 5-step monthly billing workflow for Robert Bosch LLC (Customer C10463, Supplier 226). Produces a summary invoice Excel, a master PDF bundle, and a summary CSV.',
+      'Bosch tab uses a distinct <b>TQS-branded sidebar layout</b>: 260px dark sidebar (#212322), yellow (#FEDD00) step indicators, light main content area (#f5f6f5). Step 4 (Verification) is intentionally hidden/skipped.',
+      'Billing period auto-calculates via last-Sunday logic: end = last Sunday of billing month, start = Monday after previous month\'s last Sunday.',
+      'Multiple regular Sage invoice PDFs supported (accumulated into array); 4 upload zones total (regular PDFs, expense PDFs, Qnet approvals, expense approvals).',
+      'OCR engine (Claude Vision via n8n) shown as a status banner; no separate upload zone.',
+      'Added <b>URL hash routing</b>: switching tabs now updates the browser URL — <code>#month-end</code>, <code>#pre-bill</code>, <code>#bosch</code>. Tabs are directly bookmarkable; browser back/forward navigation works.',
+      'PO Number pre-filled to <code>0083051024</code>; Account Number <code>C10463</code> is readonly.'
+    ]
+  },
   {
     version:'1.9.0',
     date:'2026-05-01',
@@ -1210,7 +1304,15 @@ function lf(file,key){
   r.readAsArrayBuffer(file);
 }
 
-function setStep(n){for(let i=1;i<=5;i++){const el=document.getElementById('st'+i);el.className='stp'+(i===n?' active':i<n?' done':'');}}
+const _ME_TITLES=['','Step 1: Dates & Period','Step 2: Upload Files','Step 3: Review Decisions','Step 4: Generate & Download','Step 5: Audit Report'];
+function setStep(n){
+  for(let i=1;i<=5;i++){
+    const el=document.getElementById('st'+i);
+    if(el) el.className='tqs-sb-step'+(i===n?' active':i<n?' done':'');
+  }
+  const hdr=document.getElementById('meMainHdr');
+  if(hdr) hdr.textContent=_ME_TITLES[n]||'';
+}
 
 // ── DATE HELPERS ──────────────────────────────────────────────────────────
 const fmt=(s)=>{if(!s)return null;const[y,m,d]=s.split('-');return`${m}/${d}/${y}`};
@@ -3103,7 +3205,15 @@ async function reconcile(){
   reconSetStep(3);
 }
 
-function reconSetStep(n){for(let i=1;i<=4;i++){const el=document.getElementById('rst'+i);if(el)el.className='stp'+(i===n?' active':i<n?' done':'');}}
+const _RECON_TITLES=['','Step 1: Periods & Dates','Step 2: Upload Files','Step 3: Review Retro Changes','Step 4: Generate & Export'];
+function reconSetStep(n){
+  for(let i=1;i<=4;i++){
+    const el=document.getElementById('rst'+i);
+    if(el) el.className='tqs-sb-step'+(i===n?' active':i<n?' done':'');
+  }
+  const hdr=document.getElementById('reconMainHdr');
+  if(hdr) hdr.textContent=_RECON_TITLES[n]||'';
+}
 
 // expectedSnapshot: { custId: { sa: { type: {amount, agreement, agreementNumber, calc, itemId} } } }
 // type ∈ 'contracted-units' | 'monthly-pricing' | 'flat-rate' | 'shutdown-credit'
