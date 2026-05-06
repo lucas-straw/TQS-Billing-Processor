@@ -1139,8 +1139,9 @@ const BOSCH={
 };
 
 const BOSCH_WEBHOOKS={
-  claudeVision:'https://teamqs.app.n8n.cloud/webhook/bosch-claude-vision',
-  qnetQuery:'https://teamqs.app.n8n.cloud/webhook/bosch-qnet-query'
+  claudeVision:'https://teamqs.app.n8n.cloud/webhook/bosch-invoice-ocr',
+  agreements:'https://teamqs.app.n8n.cloud/webhook/bosch-agreement-lookup',
+  additionalHours:'https://teamqs.app.n8n.cloud/webhook/bosch-additional-hours'
 };
 
 // ── DB LOAD ──────────────────────────────────────────────────────────────
@@ -4408,41 +4409,43 @@ function boschIsBlankPage(base64Img){
 }
 
 // ── Claude Vision via N8N ─────────────────────────────────────────────────
+// n8n batches per page and returns { success, pageCount, results:[{pageIndex,
+// success, invoice:{invoiceNumber, location, agreementNumber, total} | error}] }.
+// We aggregate page-level invoice objects into one record per (invoice#, location)
+// pair so downstream code keeps consuming {invoiceNum, location, agreementNum,
+// total, pageCount}.
 async function boschCallClaudeVision(pageImages){
+  const pages=pageImages.map(b=>({imageBase64:b,mediaType:'image/jpeg'}));
   const resp=await fetch(BOSCH_WEBHOOKS.claudeVision,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({pages:pageImages,billingMonth:BOSCH.header.billingMonth})
+    body:JSON.stringify({pages,billingMonth:BOSCH.header.billingMonth})
   });
   if(!resp.ok) throw new Error('Claude Vision webhook returned '+resp.status);
   const data=await resp.json();
-  return data.csv||data.result||'';
-}
+  if(!data.success) throw new Error(data.error||'OCR failed');
 
-// ── Parse OCR CSV ─────────────────────────────────────────────────────────
-function boschParseOcrCsv(csv){
-  const lines=csv.trim().split('\n');
-  if(lines.length<2) return[];
-  const hdr=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/[^a-z#]/g,''));
-  const iN=hdr.findIndex(h=>h.includes('invoice'));
-  const iL=hdr.findIndex(h=>h.includes('location'));
-  const iA=hdr.findIndex(h=>h.includes('agreement'));
-  const iT=hdr.findIndex(h=>h.includes('total'));
   const map={};
-  for(let i=1;i<lines.length;i++){
-    const c=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));
-    if(c.length<2) continue;
-    const key=((iN>=0?c[iN]:'')+' '+boschNormalizeLocation(iL>=0?c[iL]:'')).toUpperCase();
-    if(!map[key]) map[key]={invoiceNum:iN>=0?c[iN]:'',location:iL>=0?c[iL]:'',agreementNum:iA>=0?c[iA]:'',total:iT>=0?parseFloat(c[iT].replace(/[$,]/g,''))||0:0,pageCount:0};
+  let failed=0;
+  for(const r of (data.results||[])){
+    if(!r.success){ failed++; continue; }
+    const inv=r.invoice||{};
+    const invoiceNum=inv.invoiceNumber||'';
+    const location=inv.location||'';
+    const agreementNum=inv.agreementNumber||'';
+    const total=typeof inv.total==='number'?inv.total:(parseFloat(String(inv.total||'').replace(/[$,]/g,''))||0);
+    const key=(invoiceNum+' '+boschNormalizeLocation(location)).toUpperCase();
+    if(!map[key]) map[key]={invoiceNum,location,agreementNum,total,pageCount:0};
     map[key].pageCount++;
   }
+  if(failed>0) boschLog('  ⚠ '+failed+' page(s) failed OCR — skipped.',undefined,'log-err');
   return Object.values(map);
 }
 
 // ── Qnet data fetches ─────────────────────────────────────────────────────
 async function boschFetchAgreements(){
   try{
-    const r=await fetch(BOSCH_WEBHOOKS.qnetQuery,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:'agreements',supplier:226,billingMonth:BOSCH.header.billingMonth})});
+    const r=await fetch(BOSCH_WEBHOOKS.agreements,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({supplierId:226,billingPeriodStart:BOSCH.header.billingPeriodStart,billingPeriodEnd:BOSCH.header.billingPeriodEnd})});
     if(!r.ok) return[];
     const d=await r.json();
     return Array.isArray(d)?d:(d.agreements||[]);
@@ -4450,8 +4453,8 @@ async function boschFetchAgreements(){
 }
 async function boschFetchAdditionalHours(){
   try{
-    const r=await fetch(BOSCH_WEBHOOKS.qnetQuery,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:'additional_hours',supplier:226,billingMonth:BOSCH.header.billingMonth})});
+    const r=await fetch(BOSCH_WEBHOOKS.additionalHours,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({billingStart:BOSCH.header.billingPeriodStart,billingEnd:BOSCH.header.billingPeriodEnd})});
     if(!r.ok) return[];
     const d=await r.json();
     return Array.isArray(d)?d:(d.additionalHours||[]);
@@ -4517,15 +4520,13 @@ async function boschStartParsing(){
 
     // OCR
     boschLog('Sending to Claude Vision OCR via N8N…',25,'log-info');
-    let ocrCsv='';
+    BOSCH.invoices=[];
     try{
-      ocrCsv=await boschCallClaudeVision(filtered);
+      BOSCH.invoices=await boschCallClaudeVision(filtered);
       boschLog('OCR complete.',50,'log-ok');
     }catch(err){
       boschLog('⚠ OCR error: '+err.message+'. Continuing with empty list.',50,'log-err');
     }
-
-    BOSCH.invoices=boschParseOcrCsv(ocrCsv);
     boschLog('Parsed '+BOSCH.invoices.length+' invoice(s).',55);
 
     boschLog('Fetching Qnet agreements…',65,'log-info');
