@@ -52,26 +52,26 @@
   .stp::after{content:'›';position:absolute;right:4px;color:#444}
   .stp:last-child::after{display:none}
   .stp.active{color:#fff}.stp.done{color:var(--green)}
-  .stp-n{width:19px;height:19px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10px;flex-shrink:0}
-  .stp.active .stp-n{background:var(--red);color:#fff}
+  .stp-n{width:19px;height:19px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-family:var(--font-numeric);font-weight:600;font-size:10px;flex-shrink:0}
+  .stp.active .stp-n{background:var(--qnet-yellow);color:var(--qnet-on-yellow)}
   .stp.done .stp-n{background:var(--green);color:#fff}
   .wrap{max-width:980px;margin:0 auto;padding:22px 20px 0}
-  .card{background:var(--surf);border:1px solid var(--bd);border-radius:10px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
-  .ch{background:var(--s2);border-bottom:1px solid var(--bd);padding:12px 18px;display:flex;align-items:center;gap:10px}
-  .cn{background:var(--red);border-radius:50%;color:#fff;font-family:'DM Mono',monospace;font-size:11px;height:22px;width:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .ct{font-weight:600;font-size:13px}.cd{font-size:12px;color:var(--t2);margin-left:auto}
-  .cb{padding:16px}
-  .dg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .ds{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px}
-  .dst{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;color:var(--t2);margin-bottom:8px}
-  .f{margin-bottom:9px}.f:last-child{margin-bottom:0}
-  label{display:block;font-size:12px;font-weight:500;color:var(--t2);margin-bottom:3px}
-  input[type=date],input[type=number]{background:var(--surf);border:1px solid var(--bd);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:6px 10px;width:100%;outline:none;transition:border-color .15s}
-  input:focus{border-color:var(--blue)}
+  .card{background:var(--tqs-card-bg);border:1px solid var(--tqs-card-border);border-radius:8px;box-shadow:var(--tqs-card-shadow);margin-bottom:20px;overflow:hidden}
+  .ch{background:var(--tqs-card-bg);border-bottom:1px solid var(--tqs-card-border);padding:16px 24px;display:flex;align-items:center;gap:12px}
+  .cn{background:var(--qnet-yellow);border-radius:50%;color:var(--qnet-on-yellow);font-family:var(--font-numeric);font-weight:700;font-size:11px;height:24px;width:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ct{font-weight:600;font-size:14px;color:var(--tqs-chrome)}.cd{font-size:12px;color:var(--tqs-chrome-muted);margin-left:auto}
+  .cb{padding:20px 24px}
+  .dg{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .ds{background:#fafbfa;border:1px solid var(--tqs-card-border);border-radius:8px;padding:14px 16px}
+  .dst{font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tqs-chrome-muted);margin-bottom:10px}
+  .f{margin-bottom:10px}.f:last-child{margin-bottom:0}
+  label{display:block;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tqs-chrome-muted);margin-bottom:4px}
+  input[type=date],input[type=number]{background:#fff;border:1px solid var(--tqs-card-border);border-radius:6px;color:var(--tqs-chrome);font-family:var(--font-numeric);font-size:13px;padding:8px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+  input:focus{border-color:var(--qnet-yellow);box-shadow:0 0 0 3px var(--qnet-yellow-tint)}
   .hint{font-size:11px;color:var(--t3);margin-top:2px;font-style:italic}
-  .ug{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  .us{border:2px dashed var(--bd);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;background:var(--s2);position:relative;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .us:hover,.us.dov{border-color:var(--blue);background:rgba(47,108,200,.04)}
+  .ug{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .us{border:2px dashed var(--tqs-card-border);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:#fff;position:relative;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .us:hover,.us.dov{border-color:var(--qnet-yellow);background:var(--qnet-yellow-tint)}
   .us.ld{border-color:var(--green);border-style:solid;background:rgba(42,140,90,.05)}
   .us input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
   .sl{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red);margin-bottom:2px}
@@ -79,9 +79,9 @@
   .sok{font-size:11px;color:var(--green);font-weight:500}.sno{font-size:11px;color:var(--t2)}
   .pb-w{background:var(--bd);border-radius:4px;height:4px;margin-top:8px;overflow:hidden}
   .pb-f{background:var(--blue);height:100%;border-radius:4px;transition:width .3s}
-  .btn{background:var(--red);border:none;border-radius:7px;color:#fff;cursor:pointer;font-family:var(--font-sans);font-size:14px;font-weight:600;padding:10px 22px;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;gap:6px}
-  .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;cursor:not-allowed}
-  .btn-s{background:var(--s2);border:1px solid var(--bd);color:var(--text);font-size:13px;padding:8px 16px}
+  .btn{background:var(--qnet-yellow);border:none;border-radius:8px;color:var(--qnet-on-yellow);cursor:pointer;font-family:var(--font-sans);font-size:14px;font-weight:600;padding:10px 24px;transition:background .15s,transform .1s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover:not(:disabled){background:var(--qnet-yellow-hover)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-s{background:#fff;border:1px solid var(--tqs-card-border);color:var(--tqs-chrome);font-size:13px;padding:8px 16px}
   .btn-g{background:var(--green);color:#fff}
   .btn-b{background:var(--blue);color:#fff;font-size:13px;padding:8px 16px}
   .btn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -196,7 +196,7 @@
   .tab-bar{background:var(--text);color:#fff;padding:0 32px;display:flex;gap:0;border-bottom:1px solid #333}
   .tab-btn{background:none;border:none;color:#888;padding:11px 22px;font-family:var(--font-sans);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:8px}
   .tab-btn:hover{color:#ccc}
-  .tab-btn.active{color:#fff;border-bottom-color:var(--red)}
+  .tab-btn.active{color:var(--qnet-yellow);border-bottom-color:var(--qnet-yellow)}
   .tab-pane.hidden{display:none}
   .recon-empty{background:var(--s2);border:1px dashed var(--bd);border-radius:8px;padding:30px 20px;text-align:center;font-size:13px;color:var(--t2)}
   .recon-empty b{color:var(--text);font-weight:600}
@@ -918,7 +918,7 @@ const CHANGELOG=[
     changes:[
       'Adopted the <b>Qnet Design System</b> as the single source of truth for brand tokens. Brand yellow corrected from <code>#FEDD00</code> to the canonical <code>#FFD60A</code>; chrome, content, card, border, and muted-text colors now flow from CSS variables (<code>--qnet-yellow</code>, <code>--tqs-chrome</code>, <code>--tqs-content-bg</code>, etc.) instead of literal hex codes scattered across tab-scoped styles.',
       'Switched body typography from <b>DM Sans</b> to <b>Open Sans</b> (per Qnet design system), with <b>Inter</b> available as <code>--font-numeric</code> for tabular displays. <code>DM Mono</code> kept for true monospace use (logs, paths).',
-      'No markup or behavior changes — every tab keeps its existing layout. Future tabs can pull brand styling directly from the shared <code>:root</code> tokens instead of redefining hex values.'
+      'Modernized the legacy MonthEnd/Recon component chrome to match the Bosch tab visually: white cards with soft shadows + 8px radius (was 10px cream-on-cream), yellow primary buttons with dark text (was red), yellow step-number badges and active tab underline (was red), uppercase semibold labels, cleaner data-section panels, and a yellow focus ring on inputs. Semantic reds (error, danger, hold) are unchanged.'
     ]
   },
   {
