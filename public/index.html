@@ -9,15 +9,41 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
   :root {
+    /* ─── Qnet Design System — Team Quality Services brand tokens ─────── */
+    --qnet-yellow:#FFD60A;
+    --qnet-yellow-hover:#E5C200;
+    --qnet-yellow-tint:rgba(255,214,10,.10);
+    --qnet-yellow-tint-strong:rgba(255,214,10,.18);
+    --qnet-on-yellow:#181D27;          /* readable text/icon over yellow */
+
+    /* Dark TQS chrome (sidebar, top bars, dark headers) */
+    --tqs-chrome:#212322;
+    --tqs-chrome-2:#2A2D2B;            /* hover/raised surface on chrome */
+    --tqs-chrome-divider:rgba(255,255,255,.08);
+    --tqs-chrome-text:#C4C6C8;
+    --tqs-chrome-muted:#6A747C;
+
+    /* Light content area used by Bosch / MonthEnd / Recon */
+    --tqs-content-bg:#f5f6f5;
+    --tqs-card-bg:#ffffff;
+    --tqs-card-border:#e2e4e2;
+    --tqs-card-shadow:0 1px 3px rgba(33,35,34,.08);
+
+    /* Typography */
+    --font-sans:'Open Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    --font-numeric:'Inter','Open Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+    --font-mono:'DM Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+
+    /* ─── Legacy aliases (original light-mode tabs) ────────────────────── */
     --bg:#f4f2ed;--surf:#fff;--s2:#edeae3;--bd:#d8d4cb;
     --red:#c84b2f;--blue:#2f6cc8;--green:#2a8c5a;--amber:#b87a00;
     --text:#1a1714;--t2:#6b6560;--t3:#a09890;
     --shadow:0 1px 3px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;padding-bottom:80px}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);font-size:14px;min-height:100vh;padding-bottom:80px}
   .hdr{background:var(--text);color:#fff;padding:14px 32px}
   .hdr-t{font-size:17px;font-weight:600}
   .hdr-s{font-family:'DM Mono',monospace;font-size:11px;color:#777;margin-top:2px}
@@ -26,26 +52,26 @@
   .stp::after{content:'›';position:absolute;right:4px;color:#444}
   .stp:last-child::after{display:none}
   .stp.active{color:#fff}.stp.done{color:var(--green)}
-  .stp-n{width:19px;height:19px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10px;flex-shrink:0}
-  .stp.active .stp-n{background:var(--red);color:#fff}
+  .stp-n{width:19px;height:19px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-family:var(--font-numeric);font-weight:600;font-size:10px;flex-shrink:0}
+  .stp.active .stp-n{background:var(--qnet-yellow);color:var(--qnet-on-yellow)}
   .stp.done .stp-n{background:var(--green);color:#fff}
   .wrap{max-width:980px;margin:0 auto;padding:22px 20px 0}
-  .card{background:var(--surf);border:1px solid var(--bd);border-radius:10px;box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
-  .ch{background:var(--s2);border-bottom:1px solid var(--bd);padding:12px 18px;display:flex;align-items:center;gap:10px}
-  .cn{background:var(--red);border-radius:50%;color:#fff;font-family:'DM Mono',monospace;font-size:11px;height:22px;width:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .ct{font-weight:600;font-size:13px}.cd{font-size:12px;color:var(--t2);margin-left:auto}
-  .cb{padding:16px}
-  .dg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .ds{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px 14px}
-  .dst{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;color:var(--t2);margin-bottom:8px}
-  .f{margin-bottom:9px}.f:last-child{margin-bottom:0}
-  label{display:block;font-size:12px;font-weight:500;color:var(--t2);margin-bottom:3px}
-  input[type=date],input[type=number]{background:var(--surf);border:1px solid var(--bd);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:6px 10px;width:100%;outline:none;transition:border-color .15s}
-  input:focus{border-color:var(--blue)}
+  .card{background:var(--tqs-card-bg);border:1px solid var(--tqs-card-border);border-radius:8px;box-shadow:var(--tqs-card-shadow);margin-bottom:20px;overflow:hidden}
+  .ch{background:var(--tqs-card-bg);border-bottom:1px solid var(--tqs-card-border);padding:16px 24px;display:flex;align-items:center;gap:12px}
+  .cn{background:var(--qnet-yellow);border-radius:50%;color:var(--qnet-on-yellow);font-family:var(--font-numeric);font-weight:700;font-size:11px;height:24px;width:24px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ct{font-weight:600;font-size:14px;color:var(--tqs-chrome)}.cd{font-size:12px;color:var(--tqs-chrome-muted);margin-left:auto}
+  .cb{padding:20px 24px}
+  .dg{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .ds{background:#fafbfa;border:1px solid var(--tqs-card-border);border-radius:8px;padding:14px 16px}
+  .dst{font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tqs-chrome-muted);margin-bottom:10px}
+  .f{margin-bottom:10px}.f:last-child{margin-bottom:0}
+  label{display:block;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--tqs-chrome-muted);margin-bottom:4px}
+  input[type=date],input[type=number]{background:#fff;border:1px solid var(--tqs-card-border);border-radius:6px;color:var(--tqs-chrome);font-family:var(--font-numeric);font-size:13px;padding:8px 12px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+  input:focus{border-color:var(--qnet-yellow);box-shadow:0 0 0 3px var(--qnet-yellow-tint)}
   .hint{font-size:11px;color:var(--t3);margin-top:2px;font-style:italic}
-  .ug{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  .us{border:2px dashed var(--bd);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;background:var(--s2);position:relative;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .us:hover,.us.dov{border-color:var(--blue);background:rgba(47,108,200,.04)}
+  .ug{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .us{border:2px dashed var(--tqs-card-border);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:#fff;position:relative;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .us:hover,.us.dov{border-color:var(--qnet-yellow);background:var(--qnet-yellow-tint)}
   .us.ld{border-color:var(--green);border-style:solid;background:rgba(42,140,90,.05)}
   .us input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
   .sl{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--red);margin-bottom:2px}
@@ -53,9 +79,9 @@
   .sok{font-size:11px;color:var(--green);font-weight:500}.sno{font-size:11px;color:var(--t2)}
   .pb-w{background:var(--bd);border-radius:4px;height:4px;margin-top:8px;overflow:hidden}
   .pb-f{background:var(--blue);height:100%;border-radius:4px;transition:width .3s}
-  .btn{background:var(--red);border:none;border-radius:7px;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;padding:10px 22px;transition:opacity .15s,transform .1s;display:inline-flex;align-items:center;gap:6px}
-  .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.35;cursor:not-allowed}
-  .btn-s{background:var(--s2);border:1px solid var(--bd);color:var(--text);font-size:13px;padding:8px 16px}
+  .btn{background:var(--qnet-yellow);border:none;border-radius:8px;color:var(--qnet-on-yellow);cursor:pointer;font-family:var(--font-sans);font-size:14px;font-weight:600;padding:10px 24px;transition:background .15s,transform .1s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover:not(:disabled){background:var(--qnet-yellow-hover)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-s{background:#fff;border:1px solid var(--tqs-card-border);color:var(--tqs-chrome);font-size:13px;padding:8px 16px}
   .btn-g{background:var(--green);color:#fff}
   .btn-b{background:var(--blue);color:#fff;font-size:13px;padding:8px 16px}
   .btn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -168,9 +194,9 @@
   .cl-list li{margin-bottom:4px}
   /* Tab bar */
   .tab-bar{background:var(--text);color:#fff;padding:0 32px;display:flex;gap:0;border-bottom:1px solid #333}
-  .tab-btn{background:none;border:none;color:#888;padding:11px 22px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:8px}
+  .tab-btn{background:none;border:none;color:#888;padding:11px 22px;font-family:var(--font-sans);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;display:flex;align-items:center;gap:8px}
   .tab-btn:hover{color:#ccc}
-  .tab-btn.active{color:#fff;border-bottom-color:var(--red)}
+  .tab-btn.active{color:var(--qnet-yellow);border-bottom-color:var(--qnet-yellow)}
   .tab-pane.hidden{display:none}
   .recon-empty{background:var(--s2);border:1px dashed var(--bd);border-radius:8px;padding:30px 20px;text-align:center;font-size:13px;color:var(--t2)}
   .recon-empty b{color:var(--text);font-weight:600}
@@ -178,22 +204,22 @@
   /* ── TQS SHARED SIDEBAR LAYOUT ────────────────────────────────────────── */
   #tabMonthEnd,#tabRecon{display:flex;flex-direction:column}
   .tqs-layout{display:flex;height:calc(100vh - 100px);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-  .tqs-sidebar{width:240px;background:#212322;color:#C4C6C8;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+  .tqs-sidebar{width:240px;background:var(--tqs-chrome);color:var(--tqs-chrome-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
   .tqs-sb-hdr{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
-  .tqs-sb-title{color:#FEDD00;font-weight:600;font-size:14px;line-height:1.3}
-  .tqs-sb-sub{font-size:11px;color:#6A747C;margin-top:3px}
+  .tqs-sb-title{color:var(--qnet-yellow);font-weight:600;font-size:14px;line-height:1.3}
+  .tqs-sb-sub{font-size:11px;color:var(--tqs-chrome-muted);margin-top:3px}
   .tqs-sb-nav{flex:1;padding:12px 0}
-  .tqs-sb-step{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;font-size:13px;color:#6A747C;transition:color .15s,background .15s;user-select:none}
-  .tqs-sb-step:hover{background:rgba(255,255,255,.04);color:#C4C6C8}
-  .tqs-sb-step.active{color:#FEDD00}
+  .tqs-sb-step{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;font-size:13px;color:var(--tqs-chrome-muted);transition:color .15s,background .15s;user-select:none}
+  .tqs-sb-step:hover{background:rgba(255,255,255,.04);color:var(--tqs-chrome-text)}
+  .tqs-sb-step.active{color:var(--qnet-yellow)}
   .tqs-sb-step.done{color:#10b981}
-  .tqs-sb-circle{width:28px;height:28px;border-radius:50%;border:2px solid #3a3d3a;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;color:#6A747C;transition:all .2s;position:relative;overflow:hidden}
-  .tqs-sb-step.active .tqs-sb-circle{background:#FEDD00;border-color:#FEDD00;color:#212322}
-  .tqs-sb-step.done .tqs-sb-circle{background:#FEDD00;border-color:#FEDD00;color:#212322;font-size:0}
-  .tqs-sb-step.done .tqs-sb-circle::after{content:'✓';font-size:13px;color:#212322}
+  .tqs-sb-circle{width:28px;height:28px;border-radius:50%;border:2px solid #3a3d3a;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;color:var(--tqs-chrome-muted);transition:all .2s;position:relative;overflow:hidden}
+  .tqs-sb-step.active .tqs-sb-circle{background:var(--qnet-yellow);border-color:var(--qnet-yellow);color:var(--tqs-chrome)}
+  .tqs-sb-step.done .tqs-sb-circle{background:var(--qnet-yellow);border-color:var(--qnet-yellow);color:var(--tqs-chrome);font-size:0}
+  .tqs-sb-step.done .tqs-sb-circle::after{content:'✓';font-size:13px;color:var(--tqs-chrome)}
   .tqs-sb-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#4a5568;line-height:1.6}
-  .tqs-main{flex:1;display:flex;flex-direction:column;background:#f5f6f5;overflow:hidden;min-width:0}
-  .tqs-main-hdr{background:#fff;border-bottom:1px solid #e2e4e2;padding:20px 32px;font-size:15px;font-weight:600;color:#1a1714;flex-shrink:0}
+  .tqs-main{flex:1;display:flex;flex-direction:column;background:var(--tqs-content-bg);overflow:hidden;min-width:0}
+  .tqs-main-hdr{background:#fff;border-bottom:1px solid var(--tqs-card-border);padding:20px 32px;font-size:15px;font-weight:600;color:#1a1714;flex-shrink:0}
   .tqs-content{flex:1;overflow-y:auto}
   @media(max-width:900px){.tqs-sidebar{width:60px}.tqs-sb-hdr,.tqs-sb-footer,.tqs-sb-step span{display:none}.tqs-sb-step{justify-content:center;padding:10px}}
 
@@ -202,41 +228,41 @@
   #tabBosch .bosch-layout{display:flex;height:calc(100vh - 100px);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
 
   /* Sidebar */
-  #tabBosch .bosch-sidebar{width:260px;background:#212322;color:#C4C6C8;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+  #tabBosch .bosch-sidebar{width:260px;background:var(--tqs-chrome);color:var(--tqs-chrome-text);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
   #tabBosch .bosch-sb-hdr{padding:24px 20px 16px;border-bottom:1px solid #2d2e2d}
-  #tabBosch .bosch-sb-title{color:#FEDD00;font-weight:600;font-size:14px;line-height:1.3}
-  #tabBosch .bosch-sb-sub{font-size:11px;color:#6A747C;margin-top:3px}
+  #tabBosch .bosch-sb-title{color:var(--qnet-yellow);font-weight:600;font-size:14px;line-height:1.3}
+  #tabBosch .bosch-sb-sub{font-size:11px;color:var(--tqs-chrome-muted);margin-top:3px}
   #tabBosch .bosch-sb-nav{padding:16px 0;flex:1}
-  #tabBosch .bosch-sb-step{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:500;color:#6A747C;transition:background .15s}
-  #tabBosch .bosch-sb-step:hover{background:#2d2e2d;color:#C4C6C8}
+  #tabBosch .bosch-sb-step{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:500;color:var(--tqs-chrome-muted);transition:background .15s}
+  #tabBosch .bosch-sb-step:hover{background:#2d2e2d;color:var(--tqs-chrome-text)}
   #tabBosch .bosch-sb-circle{width:28px;height:28px;border-radius:50%;border:2px solid #444;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;transition:all .15s}
-  #tabBosch .bosch-sb-step.active{color:#FEDD00}
-  #tabBosch .bosch-sb-step.active .bosch-sb-circle{background:#FEDD00;border-color:#FEDD00;color:#212322}
+  #tabBosch .bosch-sb-step.active{color:var(--qnet-yellow)}
+  #tabBosch .bosch-sb-step.active .bosch-sb-circle{background:var(--qnet-yellow);border-color:var(--qnet-yellow);color:var(--tqs-chrome)}
   #tabBosch .bosch-sb-step.done{color:#10b981}
-  #tabBosch .bosch-sb-step.done .bosch-sb-circle{background:#FEDD00;border-color:#FEDD00;color:#212322;font-size:0}
+  #tabBosch .bosch-sb-step.done .bosch-sb-circle{background:var(--qnet-yellow);border-color:var(--qnet-yellow);color:var(--tqs-chrome);font-size:0}
   #tabBosch .bosch-sb-step.done .bosch-sb-circle::after{content:'✓';font-size:13px}
   #tabBosch .bosch-sb-step.disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
-  #tabBosch .bosch-sb-footer{padding:16px 20px;border-top:1px solid #2d2e2d;font-size:11px;color:#6A747C;line-height:1.6}
+  #tabBosch .bosch-sb-footer{padding:16px 20px;border-top:1px solid #2d2e2d;font-size:11px;color:var(--tqs-chrome-muted);line-height:1.6}
 
   /* Main area */
-  #tabBosch .bosch-main{flex:1;display:flex;flex-direction:column;background:#f5f6f5;overflow:hidden;min-width:0}
-  #tabBosch .bosch-main-hdr{background:#fff;border-bottom:1px solid #e2e4e2;padding:18px 32px;font-size:15px;font-weight:600;color:#212322;flex-shrink:0}
+  #tabBosch .bosch-main{flex:1;display:flex;flex-direction:column;background:var(--tqs-content-bg);overflow:hidden;min-width:0}
+  #tabBosch .bosch-main-hdr{background:#fff;border-bottom:1px solid var(--tqs-card-border);padding:18px 32px;font-size:15px;font-weight:600;color:var(--tqs-chrome);flex-shrink:0}
   #tabBosch .bosch-content{flex:1;overflow-y:auto;padding:24px 32px}
   #tabBosch .bosch-panel{display:block}
   #tabBosch .bosch-panel.hidden{display:none}
-  #tabBosch .bosch-action-bar{background:#fff;border-top:1px solid #e2e4e2;padding:14px 32px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+  #tabBosch .bosch-action-bar{background:#fff;border-top:1px solid var(--tqs-card-border);padding:14px 32px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 
   /* Cards */
-  #tabBosch .bosch-card{background:#fff;border:1px solid #e2e4e2;border-radius:8px;padding:24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(33,35,34,.08)}
-  #tabBosch .bosch-card h3{font-size:15px;font-weight:600;margin-bottom:4px;color:#212322}
-  #tabBosch .bosch-subtitle{color:#6A747C;font-size:13px;margin-bottom:16px}
+  #tabBosch .bosch-card{background:#fff;border:1px solid var(--tqs-card-border);border-radius:8px;padding:24px;margin-bottom:20px;box-shadow:0 1px 3px rgba(33,35,34,.08)}
+  #tabBosch .bosch-card h3{font-size:15px;font-weight:600;margin-bottom:4px;color:var(--tqs-chrome)}
+  #tabBosch .bosch-subtitle{color:var(--tqs-chrome-muted);font-size:13px;margin-bottom:16px}
 
   /* Buttons */
   #tabBosch .bosch-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:background .15s,opacity .15s;font-family:inherit}
-  #tabBosch .bosch-btn-primary{background:#FEDD00;color:#212322;font-weight:600}
-  #tabBosch .bosch-btn-primary:hover:not(:disabled){background:#e5c700}
-  #tabBosch .bosch-btn-primary:disabled{background:#C4C6C8;color:#6A747C;cursor:not-allowed}
-  #tabBosch .bosch-btn-secondary{background:#fff;color:#212322;border:1px solid #e2e4e2}
+  #tabBosch .bosch-btn-primary{background:var(--qnet-yellow);color:var(--tqs-chrome);font-weight:600}
+  #tabBosch .bosch-btn-primary:hover:not(:disabled){background:var(--qnet-yellow-hover)}
+  #tabBosch .bosch-btn-primary:disabled{background:var(--tqs-chrome-text);color:var(--tqs-chrome-muted);cursor:not-allowed}
+  #tabBosch .bosch-btn-secondary{background:#fff;color:var(--tqs-chrome);border:1px solid var(--tqs-card-border)}
   #tabBosch .bosch-btn-secondary:hover{background:#f1f5f9}
   #tabBosch .bosch-btn-success{background:#10b981;color:#fff}
   #tabBosch .bosch-btn-success:hover{background:#059669}
@@ -245,15 +271,15 @@
   /* Forms */
   #tabBosch .bosch-form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
   #tabBosch .bosch-form-group{display:flex;flex-direction:column;gap:5px}
-  #tabBosch .bosch-form-group label{font-size:11px;font-weight:600;color:#6A747C;text-transform:uppercase;letter-spacing:.5px}
-  #tabBosch .bosch-form-group input,#tabBosch .bosch-form-group select{padding:8px 12px;border:1px solid #e2e4e2;border-radius:6px;font-size:14px;font-family:inherit;color:#212322;background:#fff}
-  #tabBosch .bosch-form-group input:focus,#tabBosch .bosch-form-group select:focus{outline:none;border-color:#212322;box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+  #tabBosch .bosch-form-group label{font-size:11px;font-weight:600;color:var(--tqs-chrome-muted);text-transform:uppercase;letter-spacing:.5px}
+  #tabBosch .bosch-form-group input,#tabBosch .bosch-form-group select{padding:8px 12px;border:1px solid var(--tqs-card-border);border-radius:6px;font-size:14px;font-family:inherit;color:var(--tqs-chrome);background:#fff}
+  #tabBosch .bosch-form-group input:focus,#tabBosch .bosch-form-group select:focus{outline:none;border-color:var(--tqs-chrome);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
 
   /* Upload zones */
   #tabBosch .bosch-upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-  #tabBosch .bosch-upload-label{display:block;font-size:12px;font-weight:600;color:#6A747C;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-  #tabBosch .bosch-upload-zone{position:relative;border:2px dashed #e2e4e2;border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:#fff}
-  #tabBosch .bosch-upload-zone:hover,#tabBosch .bosch-upload-zone.dragover{border-color:#FEDD00;background:#fffde6}
+  #tabBosch .bosch-upload-label{display:block;font-size:12px;font-weight:600;color:var(--tqs-chrome-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  #tabBosch .bosch-upload-zone{position:relative;border:2px dashed var(--tqs-card-border);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;background:#fff}
+  #tabBosch .bosch-upload-zone:hover,#tabBosch .bosch-upload-zone.dragover{border-color:var(--qnet-yellow);background:#fffde6}
   #tabBosch .bosch-upload-zone.loaded{border-color:#10b981;border-style:solid;background:#ecfdf5}
   #tabBosch .bosch-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 
@@ -274,13 +300,13 @@
 
   /* Stats grid */
   #tabBosch .bosch-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}
-  #tabBosch .bosch-stat-card{background:#fff;border:1px solid #e2e4e2;border-radius:8px;padding:16px;text-align:center}
-  #tabBosch .bosch-stat-value{font-size:28px;font-weight:700;color:#212322}
-  #tabBosch .bosch-stat-label{font-size:12px;color:#6A747C;margin-top:4px}
+  #tabBosch .bosch-stat-card{background:#fff;border:1px solid var(--tqs-card-border);border-radius:8px;padding:16px;text-align:center}
+  #tabBosch .bosch-stat-value{font-size:28px;font-weight:700;color:var(--tqs-chrome)}
+  #tabBosch .bosch-stat-label{font-size:12px;color:var(--tqs-chrome-muted);margin-top:4px}
 
   /* Progress bar */
   #tabBosch .bosch-progress-bar{height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden}
-  #tabBosch .bosch-progress-fill{height:100%;background:#FEDD00;border-radius:4px;transition:width .3s}
+  #tabBosch .bosch-progress-fill{height:100%;background:var(--qnet-yellow);border-radius:4px;transition:width .3s}
 
   /* Log area */
   #tabBosch .bosch-log{background:#0f172a;color:#94a3b8;border-radius:8px;padding:16px;font-family:monospace;font-size:12px;max-height:220px;overflow-y:auto;white-space:pre-wrap;margin:0}
@@ -289,21 +315,21 @@
   #tabBosch .bosch-log .log-info{color:#60a5fa}
 
   /* Approval matching rows */
-  #tabBosch .bosch-approval-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px;border:1px solid #e2e4e2;font-size:13px}
+  #tabBosch .bosch-approval-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px;border:1px solid var(--tqs-card-border);font-size:13px}
 
   /* Data tables */
   #tabBosch .bosch-table{width:100%;border-collapse:collapse;font-size:13px}
-  #tabBosch .bosch-table th{background:#f8fafc;padding:9px 12px;text-align:left;font-weight:600;border-bottom:2px solid #e2e4e2;color:#6A747C;font-size:11px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:1}
-  #tabBosch .bosch-table td{padding:9px 12px;border-bottom:1px solid #e2e4e2;vertical-align:top;color:#212322}
+  #tabBosch .bosch-table th{background:#f8fafc;padding:9px 12px;text-align:left;font-weight:600;border-bottom:2px solid var(--tqs-card-border);color:var(--tqs-chrome-muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;position:sticky;top:0;z-index:1}
+  #tabBosch .bosch-table td{padding:9px 12px;border-bottom:1px solid var(--tqs-card-border);vertical-align:top;color:var(--tqs-chrome)}
   #tabBosch .bosch-table tr:hover td{background:#f8fafc}
 
   /* AH table (dark header) */
   #tabBosch .bosch-ah-table{width:100%;border-collapse:collapse;font-size:12px}
-  #tabBosch .bosch-ah-table th{background:#212322;color:#FEDD00;padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap}
-  #tabBosch .bosch-ah-table td{padding:6px 8px;border-bottom:1px solid #e2e4e2;color:#212322;font-size:12px}
+  #tabBosch .bosch-ah-table th{background:var(--tqs-chrome);color:var(--qnet-yellow);padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap}
+  #tabBosch .bosch-ah-table td{padding:6px 8px;border-bottom:1px solid var(--tqs-card-border);color:var(--tqs-chrome);font-size:12px}
 
   /* Summary invoice preview */
-  #tabBosch .bosch-summary-preview{border:1px solid #e2e4e2;border-radius:8px;overflow:hidden;font-size:12px}
+  #tabBosch .bosch-summary-preview{border:1px solid var(--tqs-card-border);border-radius:8px;overflow:hidden;font-size:12px}
   #tabBosch .bosch-summary-preview table{width:100%;border-collapse:collapse}
   #tabBosch .bosch-summary-preview th{background:#6b7280;color:#fff;padding:5px 8px;text-align:left;font-size:11px;border:1px solid #ccc}
   #tabBosch .bosch-summary-preview td{padding:5px 8px;border:1px solid #ccc;font-size:11px}
@@ -671,20 +697,20 @@
             </div>
             <div class="bosch-form-group">
               <label>ACCOUNT NUMBER</label>
-              <input type="text" id="bAccountNum" value="C10463" readonly style="background:#f8fafc;color:#6A747C;cursor:default"/>
+              <input type="text" id="bAccountNum" value="C10463" readonly style="background:#f8fafc;color:var(--tqs-chrome-muted);cursor:default"/>
             </div>
           </div>
           <div class="bosch-form-row">
             <div class="bosch-form-group">
               <label>BILLING PERIOD START</label>
-              <input type="text" id="bPeriodStart" readonly placeholder="Auto-calculated" style="background:#f8fafc;color:#6A747C;cursor:default"/>
+              <input type="text" id="bPeriodStart" readonly placeholder="Auto-calculated" style="background:#f8fafc;color:var(--tqs-chrome-muted);cursor:default"/>
             </div>
             <div class="bosch-form-group">
               <label>BILLING PERIOD END</label>
-              <input type="text" id="bPeriodEnd" readonly placeholder="Auto-calculated" style="background:#f8fafc;color:#6A747C;cursor:default"/>
+              <input type="text" id="bPeriodEnd" readonly placeholder="Auto-calculated" style="background:#f8fafc;color:var(--tqs-chrome-muted);cursor:default"/>
             </div>
           </div>
-          <div id="bBillingWeeksInfo" style="font-size:12px;color:#6A747C;margin-top:4px"></div>
+          <div id="bBillingWeeksInfo" style="font-size:12px;color:var(--tqs-chrome-muted);margin-top:4px"></div>
           <div id="bUploadMsg" style="margin-top:10px;font-size:13px;color:#ef4444"></div>
         </div>
 
@@ -766,8 +792,8 @@
         <div class="bosch-card">
           <h3>Processing Progress</h3>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <span id="bParseStatus" style="font-size:13px;color:#6A747C">Waiting to start…</span>
-            <span id="bParsePct" style="font-size:12px;font-family:monospace;color:#6A747C">0%</span>
+            <span id="bParseStatus" style="font-size:13px;color:var(--tqs-chrome-muted)">Waiting to start…</span>
+            <span id="bParsePct" style="font-size:12px;font-family:monospace;color:var(--tqs-chrome-muted)">0%</span>
           </div>
           <div class="bosch-progress-bar" style="margin-bottom:16px">
             <div class="bosch-progress-fill" id="bParseBar" style="width:0%"></div>
@@ -775,7 +801,7 @@
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
             <button class="bosch-btn bosch-btn-primary bosch-btn-lg" id="bStartBtn" onclick="boschStartParsing()" disabled>▶ Begin Extraction</button>
             <button class="bosch-btn bosch-btn-secondary" id="bStopBtn" onclick="BOSCH.abortParsing=true" style="display:none">■ Stop</button>
-            <div style="width:1px;background:#e2e4e2;margin:0 4px"></div>
+            <div style="width:1px;background:var(--tqs-card-border);margin:0 4px"></div>
             <button class="bosch-btn bosch-btn-secondary" onclick="boschLoadAdditionalHours()">↻ Refresh Agreements</button>
           </div>
           <pre id="bParseLog" class="bosch-log"></pre>
@@ -861,7 +887,7 @@
           <div class="bosch-progress-bar hidden" id="bGenBarWrap" style="margin-top:16px;max-width:360px">
             <div class="bosch-progress-fill" id="bGenBar" style="width:0%"></div>
           </div>
-          <div id="bGenStatus" style="font-size:13px;color:#6A747C;margin-top:8px"></div>
+          <div id="bGenStatus" style="font-size:13px;color:var(--tqs-chrome-muted);margin-top:8px"></div>
         </div>
 
         <div style="margin-top:8px">
@@ -884,8 +910,17 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='2.1.0';
+const APP_VERSION='2.2.0';
 const CHANGELOG=[
+  {
+    version:'2.2.0',
+    date:'2026-05-06',
+    changes:[
+      'Adopted the <b>Qnet Design System</b> as the single source of truth for brand tokens. Brand yellow corrected from <code>#FEDD00</code> to the canonical <code>#FFD60A</code>; chrome, content, card, border, and muted-text colors now flow from CSS variables (<code>--qnet-yellow</code>, <code>--tqs-chrome</code>, <code>--tqs-content-bg</code>, etc.) instead of literal hex codes scattered across tab-scoped styles.',
+      'Switched body typography from <b>DM Sans</b> to <b>Open Sans</b> (per Qnet design system), with <b>Inter</b> available as <code>--font-numeric</code> for tabular displays. <code>DM Mono</code> kept for true monospace use (logs, paths).',
+      'Modernized the legacy MonthEnd/Recon component chrome to match the Bosch tab visually: white cards with soft shadows + 8px radius (was 10px cream-on-cream), yellow primary buttons with dark text (was red), yellow step-number badges and active tab underline (was red), uppercase semibold labels, cleaner data-section panels, and a yellow focus ring on inputs. Semantic reds (error, danger, hold) are unchanged.'
+    ]
+  },
   {
     version:'2.1.0',
     date:'2026-05-05',
@@ -1139,8 +1174,9 @@ const BOSCH={
 };
 
 const BOSCH_WEBHOOKS={
-  claudeVision:'https://teamqs.app.n8n.cloud/webhook/bosch-claude-vision',
-  qnetQuery:'https://teamqs.app.n8n.cloud/webhook/bosch-qnet-query'
+  claudeVision:'https://teamqs.app.n8n.cloud/webhook/bosch-invoice-ocr',
+  agreements:'https://teamqs.app.n8n.cloud/webhook/bosch-agreement-lookup',
+  additionalHours:'https://teamqs.app.n8n.cloud/webhook/bosch-additional-hours'
 };
 
 // ── DB LOAD ──────────────────────────────────────────────────────────────
@@ -4408,41 +4444,43 @@ function boschIsBlankPage(base64Img){
 }
 
 // ── Claude Vision via N8N ─────────────────────────────────────────────────
+// n8n batches per page and returns { success, pageCount, results:[{pageIndex,
+// success, invoice:{invoiceNumber, location, agreementNumber, total} | error}] }.
+// We aggregate page-level invoice objects into one record per (invoice#, location)
+// pair so downstream code keeps consuming {invoiceNum, location, agreementNum,
+// total, pageCount}.
 async function boschCallClaudeVision(pageImages){
+  const pages=pageImages.map(b=>({imageBase64:b,mediaType:'image/jpeg'}));
   const resp=await fetch(BOSCH_WEBHOOKS.claudeVision,{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({pages:pageImages,billingMonth:BOSCH.header.billingMonth})
+    body:JSON.stringify({pages,billingMonth:BOSCH.header.billingMonth})
   });
   if(!resp.ok) throw new Error('Claude Vision webhook returned '+resp.status);
   const data=await resp.json();
-  return data.csv||data.result||'';
-}
+  if(!data.success) throw new Error(data.error||'OCR failed');
 
-// ── Parse OCR CSV ─────────────────────────────────────────────────────────
-function boschParseOcrCsv(csv){
-  const lines=csv.trim().split('\n');
-  if(lines.length<2) return[];
-  const hdr=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/[^a-z#]/g,''));
-  const iN=hdr.findIndex(h=>h.includes('invoice'));
-  const iL=hdr.findIndex(h=>h.includes('location'));
-  const iA=hdr.findIndex(h=>h.includes('agreement'));
-  const iT=hdr.findIndex(h=>h.includes('total'));
   const map={};
-  for(let i=1;i<lines.length;i++){
-    const c=lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));
-    if(c.length<2) continue;
-    const key=((iN>=0?c[iN]:'')+' '+boschNormalizeLocation(iL>=0?c[iL]:'')).toUpperCase();
-    if(!map[key]) map[key]={invoiceNum:iN>=0?c[iN]:'',location:iL>=0?c[iL]:'',agreementNum:iA>=0?c[iA]:'',total:iT>=0?parseFloat(c[iT].replace(/[$,]/g,''))||0:0,pageCount:0};
+  let failed=0;
+  for(const r of (data.results||[])){
+    if(!r.success){ failed++; continue; }
+    const inv=r.invoice||{};
+    const invoiceNum=inv.invoiceNumber||'';
+    const location=inv.location||'';
+    const agreementNum=inv.agreementNumber||'';
+    const total=typeof inv.total==='number'?inv.total:(parseFloat(String(inv.total||'').replace(/[$,]/g,''))||0);
+    const key=(invoiceNum+' '+boschNormalizeLocation(location)).toUpperCase();
+    if(!map[key]) map[key]={invoiceNum,location,agreementNum,total,pageCount:0};
     map[key].pageCount++;
   }
+  if(failed>0) boschLog('  ⚠ '+failed+' page(s) failed OCR — skipped.',undefined,'log-err');
   return Object.values(map);
 }
 
 // ── Qnet data fetches ─────────────────────────────────────────────────────
 async function boschFetchAgreements(){
   try{
-    const r=await fetch(BOSCH_WEBHOOKS.qnetQuery,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:'agreements',supplier:226,billingMonth:BOSCH.header.billingMonth})});
+    const r=await fetch(BOSCH_WEBHOOKS.agreements,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({supplierId:226,billingPeriodStart:BOSCH.header.billingPeriodStart,billingPeriodEnd:BOSCH.header.billingPeriodEnd})});
     if(!r.ok) return[];
     const d=await r.json();
     return Array.isArray(d)?d:(d.agreements||[]);
@@ -4450,8 +4488,8 @@ async function boschFetchAgreements(){
 }
 async function boschFetchAdditionalHours(){
   try{
-    const r=await fetch(BOSCH_WEBHOOKS.qnetQuery,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({query:'additional_hours',supplier:226,billingMonth:BOSCH.header.billingMonth})});
+    const r=await fetch(BOSCH_WEBHOOKS.additionalHours,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({billingStart:BOSCH.header.billingPeriodStart,billingEnd:BOSCH.header.billingPeriodEnd})});
     if(!r.ok) return[];
     const d=await r.json();
     return Array.isArray(d)?d:(d.additionalHours||[]);
@@ -4462,10 +4500,10 @@ async function boschFetchAdditionalHours(){
 async function boschLoadAdditionalHours(){
   const div=document.getElementById('bAHTable');
   if(!div) return;
-  div.innerHTML='<p style="color:#6A747C;font-size:13px">Loading…</p>';
+  div.innerHTML='<p style="color:var(--tqs-chrome-muted);font-size:13px">Loading…</p>';
   const rows=await boschFetchAdditionalHours();
   BOSCH.additionalHours=rows;
-  if(!rows.length){div.innerHTML='<p style="color:#6A747C;font-size:13px">No additional hours found for this billing period.</p>';return;}
+  if(!rows.length){div.innerHTML='<p style="color:var(--tqs-chrome-muted);font-size:13px">No additional hours found for this billing period.</p>';return;}
   let h='<table class="bosch-ah-table"><thead><tr>';
   ['Location','Division','Hours','Reason','Rep','Date Worked','Approved By','QA #','Approval'].forEach(c=>{h+=`<th>${c}</th>`;});
   h+='</tr></thead><tbody>';
@@ -4517,15 +4555,13 @@ async function boschStartParsing(){
 
     // OCR
     boschLog('Sending to Claude Vision OCR via N8N…',25,'log-info');
-    let ocrCsv='';
+    BOSCH.invoices=[];
     try{
-      ocrCsv=await boschCallClaudeVision(filtered);
+      BOSCH.invoices=await boschCallClaudeVision(filtered);
       boschLog('OCR complete.',50,'log-ok');
     }catch(err){
       boschLog('⚠ OCR error: '+err.message+'. Continuing with empty list.',50,'log-err');
     }
-
-    BOSCH.invoices=boschParseOcrCsv(ocrCsv);
     boschLog('Parsed '+BOSCH.invoices.length+' invoice(s).',55);
 
     boschLog('Fetching Qnet agreements…',65,'log-info');
@@ -4559,17 +4595,17 @@ async function boschStartParsing(){
 // ── Extracted invoice table (Step 2) ─────────────────────────────────────
 function boschRenderExtractedTable(){
   const div=document.getElementById('bExtractedTable'); if(!div) return;
-  if(!BOSCH.invoices.length){div.innerHTML='<p style="color:#6A747C;font-size:13px">No invoices extracted.</p>';return;}
+  if(!BOSCH.invoices.length){div.innerHTML='<p style="color:var(--tqs-chrome-muted);font-size:13px">No invoices extracted.</p>';return;}
   let h='<table class="bosch-table"><thead><tr>';
   ['Invoice #','Service Location','Agr #','Pages','Total'].forEach(c=>h+=`<th>${c}</th>`);
   h+='</tr></thead><tbody>';
   BOSCH.invoices.forEach((inv,i)=>{
     h+=`<tr>
-      <td><input type="text" value="${boschEsc(inv.invoiceNum)}" style="border:1px solid #e2e4e2;border-radius:4px;padding:3px 6px;font-size:12px;width:100px" onchange="BOSCH.invoices[${i}].invoiceNum=this.value"/></td>
-      <td><input type="text" value="${boschEsc(inv.location)}" style="border:1px solid #e2e4e2;border-radius:4px;padding:3px 6px;font-size:12px;width:180px" onchange="BOSCH.invoices[${i}].location=this.value"/></td>
-      <td><input type="text" value="${boschEsc(inv.agreementNum)}" style="border:1px solid #e2e4e2;border-radius:4px;padding:3px 6px;font-size:12px;width:70px" onchange="BOSCH.invoices[${i}].agreementNum=this.value"/></td>
+      <td><input type="text" value="${boschEsc(inv.invoiceNum)}" style="border:1px solid var(--tqs-card-border);border-radius:4px;padding:3px 6px;font-size:12px;width:100px" onchange="BOSCH.invoices[${i}].invoiceNum=this.value"/></td>
+      <td><input type="text" value="${boschEsc(inv.location)}" style="border:1px solid var(--tqs-card-border);border-radius:4px;padding:3px 6px;font-size:12px;width:180px" onchange="BOSCH.invoices[${i}].location=this.value"/></td>
+      <td><input type="text" value="${boschEsc(inv.agreementNum)}" style="border:1px solid var(--tqs-card-border);border-radius:4px;padding:3px 6px;font-size:12px;width:70px" onchange="BOSCH.invoices[${i}].agreementNum=this.value"/></td>
       <td>${inv.pageCount||'—'}</td>
-      <td><input type="number" value="${inv.total||0}" step="0.01" style="border:1px solid #e2e4e2;border-radius:4px;padding:3px 6px;font-size:12px;width:80px" onchange="BOSCH.invoices[${i}].total=parseFloat(this.value)||0"/></td>
+      <td><input type="number" value="${inv.total||0}" step="0.01" style="border:1px solid var(--tqs-card-border);border-radius:4px;padding:3px 6px;font-size:12px;width:80px" onchange="BOSCH.invoices[${i}].total=parseFloat(this.value)||0"/></td>
     </tr>`;
   });
   h+='</tbody></table>';
@@ -4601,21 +4637,21 @@ function boschBuildSortMatch(){
   const sortedDiv=document.getElementById('bSortedOrder');
   if(sortedDiv){
     if(!BOSCH.invoices.length){
-      sortedDiv.innerHTML='<p style="color:#6A747C;font-size:13px">No invoices were extracted. You can still proceed to add approvals manually.</p>';
+      sortedDiv.innerHTML='<p style="color:var(--tqs-chrome-muted);font-size:13px">No invoices were extracted. You can still proceed to add approvals manually.</p>';
     }else{
       let h='';
       let lastLoc='';
       BOSCH.invoices.forEach((inv,i)=>{
         const loc=inv.location||'Unknown';
         if(boschNormalizeLocation(loc)!==boschNormalizeLocation(lastLoc)){
-          h+=`<div style="font-weight:600;font-size:14px;border-bottom:1px solid #e2e4e2;padding-bottom:6px;margin:16px 0 8px">${boschEsc(loc)}</div>`;
+          h+=`<div style="font-weight:600;font-size:14px;border-bottom:1px solid var(--tqs-card-border);padding-bottom:6px;margin:16px 0 8px">${boschEsc(loc)}</div>`;
           lastLoc=loc;
         }
         h+=`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:#f8fafc;border-radius:6px;margin-bottom:4px;font-size:13px">
-          <span style="font-size:11px;font-weight:600;color:#6A747C;min-width:24px">${i+1}</span>
+          <span style="font-size:11px;font-weight:600;color:var(--tqs-chrome-muted);min-width:24px">${i+1}</span>
           <span class="bosch-badge bosch-badge-blue">regular</span>
           <span>${boschEsc(inv.invoiceNum)||'—'} · ${boschEsc(inv.location)}</span>
-          <span style="margin-left:auto;color:#6A747C">${inv.total?'$'+inv.total.toFixed(2):''}</span>
+          <span style="margin-left:auto;color:var(--tqs-chrome-muted)">${inv.total?'$'+inv.total.toFixed(2):''}</span>
         </div>`;
       });
       sortedDiv.innerHTML=h;
@@ -4637,7 +4673,7 @@ function boschBuildSortMatch(){
       h+=`<div class="bosch-approval-row">
         <span class="bosch-badge ${isQnet?'bosch-badge-blue':'bosch-badge-pink'}">${isQnet?'Qnet':'Expense'}</span>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${boschEsc(name)}</span>
-        <select style="font-size:12px;padding:3px 6px;border:1px solid #e2e4e2;border-radius:4px;background:#fff" onchange="BOSCH.approvalMatches[${ai}]=parseInt(this.value)">${opts}</select>
+        <select style="font-size:12px;padding:3px 6px;border:1px solid var(--tqs-card-border);border-radius:4px;background:#fff" onchange="BOSCH.approvalMatches[${ai}]=parseInt(this.value)">${opts}</select>
       </div>`;
       BOSCH.approvalMatches[ai]=guessInvIdx;
     });
