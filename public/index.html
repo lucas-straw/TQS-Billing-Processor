@@ -4488,8 +4488,13 @@ async function boschCallClaudeVision(pageImages){
 
   const map={};
   let failed=0;
+  let firstFailErr='';
   for(const r of (data.results||[])){
-    if(!r.success){ failed++; continue; }
+    if(!r.success){
+      failed++;
+      if(!firstFailErr) firstFailErr=r.error||r.message||JSON.stringify(r).slice(0,200);
+      continue;
+    }
     const inv=r.invoice||{};
     const invoiceNum=inv.invoiceNumber||'';
     const location=inv.location||'';
@@ -4499,7 +4504,10 @@ async function boschCallClaudeVision(pageImages){
     if(!map[key]) map[key]={invoiceNum,location,agreementNum,total,pageCount:0};
     map[key].pageCount++;
   }
-  if(failed>0) boschLog('  ⚠ '+failed+' page(s) failed OCR — skipped.',undefined,'log-err');
+  if(failed>0){
+    boschLog('  ⚠ '+failed+' page(s) failed OCR — skipped.',undefined,'log-err');
+    if(firstFailErr) boschLog('  First failure reason: '+firstFailErr,undefined,'log-err');
+  }
   return Object.values(map);
 }
 
