@@ -1170,7 +1170,10 @@ const BOSCH={
   approvalMatches:{},   // invoiceKey -> {qnetIdx, expIdx}
   bundleBytes:null,
   excelBytes:null,
-  csvText:''
+  csvText:'',
+  currentStep:1,
+  abortParsing:false,
+  billingWeeks:4
 };
 
 const BOSCH_WEBHOOKS={
