@@ -14,6 +14,7 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
+| v2.3.9 | 2026-05-08 | Re-add feature branch deploy trigger to workflow (pending Azure federated credential setup for the feature branch). | `7669a31` |
 | v2.3.8 | 2026-05-08 | Revert deploy workflow to main-only trigger — feature branch trigger caused Azure federated identity error (subject mismatch). | `fb43bbf` |
 | v2.3.7 | 2026-05-08 | Deploy workflow: also trigger on push to `claude/add-billing-processor-tab-VLeg1` so Azure deploys without requiring a manual push to main. | `35c89ce` |
 | v2.3.6 | 2026-05-08 | Add per-agreement scheduled hours diagnostic logging (parse log + console) to diagnose 50 vs 40 scheduled hours mismatch. | `d242a94` |
