@@ -310,11 +310,15 @@ body {
 .file-item .remove {
   color: var(--danger);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1;
-  padding: 0 2px;
-  background: none;
-  border: none;
+  padding: 3px 7px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ── Form ── */
@@ -1203,13 +1207,17 @@ function renderFileList(type, files) {
   const container = document.getElementById('files-' + type);
   if (!container) return;
   if (!files.length) { container.innerHTML = ''; return; }
-  container.innerHTML = files.map((f, i) => `
+  const rows = files.map((f, i) => `
     <div class="file-item">
       <span class="name" title="${esc(f.name)}">${esc(f.name)}</span>
       <span class="meta">${(f.size / 1048576).toFixed(1)} MB</span>
-      <button class="remove" onclick="removeFile('${type}',${i})" title="Remove">×</button>
+      <button class="remove" onclick="removeFile('${type}',${i})" title="Remove file">✕ Remove</button>
     </div>
   `).join('');
+  const clearAll = files.length > 1
+    ? `<div style="text-align:right;margin-bottom:4px"><button onclick="clearFiles('${type}')" style="font-size:11px;color:var(--danger);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline">Clear all</button></div>`
+    : '';
+  container.innerHTML = clearAll + rows;
 }
 
 function removeFile(type, index) {
@@ -1220,6 +1228,17 @@ function removeFile(type, index) {
     APP.files[type].splice(index, 1);
     renderFileList(type, APP.files[type]);
   }
+}
+
+function clearFiles(type) {
+  if (type === 'billing') {
+    APP.files.billing = null;
+  } else {
+    APP.files[type] = [];
+  }
+  renderFileList(type, []);
+  const input = document.getElementById('file-' + type);
+  if (input) input.value = '';
 }
 
 // ── Drag and Drop ─────────────────────────────────────────────────────────
@@ -2530,6 +2549,27 @@ const ROWS_PER_PAGE = 30;
 const COL_X = [50, 280, 350, 430, 490, 545, 620, 710];
 const COL_HDRS = ['Description', 'Invoice #', 'Type', 'Scheduled Hours', 'Hours Worked', 'Unit Price', 'Subtotal', 'Grand Total'];
 
+// Helper: embed a cached rendered page (PNG base64) into a PDFDocument page
+async function embedCachedPage(mergedPdf, cached) {
+  const pngBytes = Uint8Array.from(atob(cached.imageData), c => c.charCodeAt(0));
+  const img = await mergedPdf.embedPng(pngBytes);
+  // cached.width/height are rendered pixels at 2× scale → divide by 2 for PDF points
+  const origW = Math.round(cached.width / 2);
+  const origH = Math.round(cached.height / 2);
+  const page = mergedPdf.addPage([origW, origH]);
+  page.drawImage(img, { x: 0, y: 0, width: origW, height: origH });
+}
+
+// Helper: fall back to pdf-lib copyPages when no cached image
+async function copyPageFallback(mergedPdf, srcDoc, zeroIdx, label) {
+  try {
+    const [copied] = await mergedPdf.copyPages(srcDoc, [zeroIdx]);
+    mergedPdf.addPage(copied);
+  } catch (err) {
+    console.error(`copyPages fallback failed for ${label} page ${zeroIdx + 1}:`, err);
+  }
+}
+
 async function generateBundle() {
   if (typeof PDFLib === 'undefined') { alert('pdf-lib not loaded.'); return; }
   const progWrap = document.getElementById('generateProgress');
@@ -2546,20 +2586,24 @@ async function generateBundle() {
     // Summary cover pages
     await addSummaryPages(merged);
     progBar.style.width = '15%';
-    progStatus.textContent = 'Loading source PDFs…';
 
-    // Load all regular PDFs — re-read from File objects for fresh bytes
+    // Load source PDFs for copyPages fallback only (primary path uses cached PNG images)
+    progStatus.textContent = 'Loading source PDFs…';
     const regularPdfDocs = [];
     for (const file of APP.files.regular) {
-      const buf = await file.arrayBuffer();
-      const doc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
-      regularPdfDocs.push(doc);
+      try {
+        const buf = await file.arrayBuffer();
+        const doc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
+        regularPdfDocs.push(doc);
+      } catch { regularPdfDocs.push(null); }
     }
     const expensePdfDocs = [];
     for (const file of APP.files.expense) {
-      const buf = await file.arrayBuffer();
-      const doc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
-      expensePdfDocs.push(doc);
+      try {
+        const buf = await file.arrayBuffer();
+        const doc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
+        expensePdfDocs.push(doc);
+      } catch { expensePdfDocs.push(null); }
     }
 
     progBar.style.width = '30%';
@@ -2567,61 +2611,65 @@ async function generateBundle() {
 
     const allApprovals = [...APP.approvals.qnet, ...APP.approvals.expense];
 
-    // If no sorted invoices (e.g. OCR failed), fall back to copying all regular PDF pages in order
     if (!APP.sortedInvoices.length) {
-      progStatus.textContent = 'No parsed invoices — copying all PDF pages in order…';
-      logMsg && logMsg('No sorted invoices found — falling back to raw PDF copy.', 'log-error');
-      for (const doc of regularPdfDocs) {
-        const indices = doc.getPageIndices();
-        const copied = await merged.copyPages(doc, indices);
-        copied.forEach(p => merged.addPage(p));
-      }
-      for (const doc of expensePdfDocs) {
-        const indices = doc.getPageIndices();
-        const copied = await merged.copyPages(doc, indices);
-        copied.forEach(p => merged.addPage(p));
+      // OCR was skipped or failed entirely — embed all cached rendered pages in order
+      progStatus.textContent = 'No parsed invoices — embedding all rendered pages in order…';
+      const allCached = [
+        ...APP.regularPages.map(p => ({ ...p, source: 'regular' })),
+        ...APP.expensePages.map(p => ({ ...p, source: 'expense' })),
+      ];
+      if (allCached.length) {
+        for (const cached of allCached) {
+          await embedCachedPage(merged, cached);
+        }
+      } else {
+        // No cached images either — last-resort copyPages from raw files
+        for (const doc of [...regularPdfDocs, ...expensePdfDocs]) {
+          if (!doc) continue;
+          const n = doc.getPageCount();
+          for (let i = 0; i < n; i++) await copyPageFallback(merged, doc, i, 'fallback');
+        }
       }
     } else {
       const total = APP.sortedInvoices.length;
       let done = 0;
 
       for (const inv of APP.sortedInvoices) {
-        // Copy invoice pages
         const srcIdx = inv.sourceFileIndex || 0;
+        const cachedPool = inv.source === 'expense' ? APP.expensePages : APP.regularPages;
         const srcDocs = inv.source === 'expense' ? expensePdfDocs : regularPdfDocs;
-        const srcDoc = srcDocs[srcIdx];
-        if (!srcDoc) {
-          progStatus.textContent = `⚠ Missing source doc for inv# ${inv.invoiceNumber} (file index ${srcIdx})`;
-          console.warn('Missing srcDoc for', inv);
-        } else {
-          for (const pageIdx of inv.pages) {
-            const zeroIdx = pageIdx - 1;
-            if (zeroIdx < 0 || zeroIdx >= srcDoc.getPageCount()) {
-              console.warn(`Page index ${pageIdx} out of range for inv# ${inv.invoiceNumber}`);
-              continue;
-            }
+
+        for (const pageIdx of inv.pages) {
+          // Primary: embed cached PNG rendered during OCR step (reliable for any PDF)
+          const cached = cachedPool.find(p => p.sourceFileIndex === srcIdx && p.pageIndex === pageIdx);
+          if (cached && cached.imageData) {
             try {
-              const [copied] = await merged.copyPages(srcDoc, [zeroIdx]);
-              merged.addPage(copied);
-            } catch (copyErr) {
-              console.error(`copyPages failed for inv# ${inv.invoiceNumber} page ${pageIdx}:`, copyErr);
-              progStatus.textContent = `⚠ Copy error on inv# ${inv.invoiceNumber} p${pageIdx}: ${copyErr.message}`;
+              await embedCachedPage(merged, cached);
+            } catch (embedErr) {
+              console.error(`PNG embed failed for inv# ${inv.invoiceNumber} p${pageIdx}:`, embedErr);
+              // Fall back to copyPages
+              const srcDoc = srcDocs[srcIdx];
+              if (srcDoc) await copyPageFallback(merged, srcDoc, pageIdx - 1, inv.invoiceNumber);
             }
+          } else {
+            // No cached image (OCR wasn't run or page wasn't rendered) — try copyPages
+            const srcDoc = srcDocs[srcIdx];
+            if (srcDoc) await copyPageFallback(merged, srcDoc, pageIdx - 1, inv.invoiceNumber);
+            else console.warn(`No source for inv# ${inv.invoiceNumber} srcIdx=${srcIdx}`);
           }
         }
 
-        // Splice in assigned approvals
+        // Splice in assigned approvals after each invoice
         const invIdx = APP.sortedInvoices.indexOf(inv);
         for (const [ai, ii] of Object.entries(APP.approvalAssignments)) {
           if (ii !== invIdx) continue;
           const appr = allApprovals[parseInt(ai)];
-          if (!appr) continue;
-          await addApprovalToBundle(merged, appr);
+          if (appr) await addApprovalToBundle(merged, appr);
         }
 
         done++;
         progBar.style.width = (30 + Math.round((done / total) * 60)) + '%';
-        progStatus.textContent = `Added invoice ${done}/${total}: ${inv.invoiceNumber || '(no#)'} @ ${inv.location || '(no loc)'}`;
+        progStatus.textContent = `Added ${done}/${total}: inv# ${inv.invoiceNumber || '?'} · ${inv.pages.length} page(s)`;
       }
     }
 
