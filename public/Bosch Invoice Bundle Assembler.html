@@ -1090,6 +1090,11 @@ async function startParsing() {
         if (APP.agreementData[cleanNum]) {
           inv.scheduledHours = APP.agreementData[cleanNum].scheduledHours;
           inv.contractHoursWeekly = parseFloat(APP.agreementData[cleanNum].contractHours) || 0;
+          const qnetName = APP.agreementData[cleanNum].locationName;
+          if (qnetName && qnetName !== inv.location) {
+            logMsg(`  ${inv.invoiceNumber || inv.id}: location "${inv.location}" → "${qnetName}"`, 'info');
+            inv.location = qnetName;
+          }
           matched++;
         }
       });
@@ -2134,9 +2139,9 @@ function drawTableRow(page, y, row, font, fontBold) {
   page.drawText(String(row.qty !== undefined && row.qty !== '' ? row.qty : '0'), { x: cols[4], y, size: 7, font: f, color: clr });
   page.drawText(row.rate ? '$ ' + row.rate.toFixed(2) : '', { x: cols[5], y, size: 7, font: f, color: clr });
   page.drawText(row.subtotal !== '' && row.subtotal !== undefined ? '$ ' + Number(row.subtotal).toFixed(2) : '$ 0.00', { x: cols[6], y, size: 7, font: f, color: clr });
-  // Grand total on the first row (Standard hours) — bolded
-  if (row.isFirstRow && row.grandTotal) {
-    page.drawText('$ ' + row.grandTotal.toFixed(2), { x: cols[7], y, size: 7, font: fontBold, color: clr });
+  // Grand total on the first row (Standard hours) — bolded; always draw even if 0
+  if (row.isFirstRow) {
+    page.drawText('$ ' + Number(row.grandTotal || 0).toFixed(2), { x: cols[7], y, size: 7, font: fontBold, color: clr });
   }
 }
  

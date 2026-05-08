@@ -911,8 +911,17 @@
 <script id="mainScript">
 // ── VERSION & CHANGELOG ──────────────────────────────────────────────────
 // Newest entries first. Bump APP_VERSION when shipping user-visible changes.
-const APP_VERSION='2.2.0';
+const APP_VERSION='2.3.0';
 const CHANGELOG=[
+  {
+    version:'2.3.0',
+    date:'2026-05-08',
+    changes:[
+      '<b>Bosch Bundle Assembler</b> is now embedded directly in the #bosch tab via <code>&lt;iframe&gt;</code>, eliminating CSS/JS conflicts with the main app. The file (<code>Bosch Invoice Bundle Assembler.html</code>) is also accessible as a standalone double-click file.',
+      'Fix: after OCR, invoice <b>location names</b> are now resolved to their Qnet canonical names (e.g. "BMW - Spartanburg, SC" → "BMW Spartanburg") by matching the extracted agreement number against the Qnet agreement data. Location mapping is logged per invoice.',
+      'Fix: <b>Grand Total column</b> in the PDF summary now always renders on the first row of each location group, even when the value is $0.00 (previously skipped due to a falsy check on zero).'
+    ]
+  },
   {
     version:'2.2.0',
     date:'2026-05-06',
