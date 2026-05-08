@@ -14,6 +14,7 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
+| v1.9.6 | 2026-05-08 | Add `.claude/settings.json` with PostToolUse hook — fires after every `git commit` and injects a reminder to update `docs/PROJECT_LOG.md`. Backfill Bosch entries v1.9.2–v1.9.5 into version table. | `d20cf3c` |
 | v1.9.5 | 2026-05-08 | **Bosch:** Fix blank PDF bundle — embed cached PDF.js-rendered PNGs instead of pdf-lib `copyPages` (which produces blank pages on Sage PDFs). Add "✕ Remove" buttons + "Clear all" per upload zone. | `392e10e` |
 | v1.9.4 | 2026-05-08 | **Bosch:** Fix OCR format mismatch — `callClaudeVision` now sends `{pages:[…],billingMonth}` batch format matching N8N webhook contract (was sending single-page+systemPrompt). Per-page log shows inv#/location/agreement. Agreement-to-invoice matching logs each Qnet name resolution. | `6fd747b` |
 | v1.9.3 | 2026-05-08 | **Bosch:** Standalone `Bosch Invoice Bundle Assembler.html` — full rewrite as double-click-to-open file. 5-step wizard (step 4 hidden), per-page Claude Vision OCR via N8N, `buildSummaryRows()` seeded from Qnet agreements, landscape pdf-lib cover pages, `APP` state object. | `b0c7119` |
