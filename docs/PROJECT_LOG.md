@@ -14,6 +14,7 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
+| v2.3.1 | 2026-05-08 | PROJECT_LOG self-update: add v2.3.0 row. | `735c8ee` |
 | v2.3.0 | 2026-05-08 | Fix Bosch location matching (Qnet canonical name after agreement match), PDF grand total always drawn on first row, app changelog bumped to 2.3.0. | `8e85f77` |
 | v1.9.9 | 2026-05-08 | **Bosch:** Embed standalone assembler in `#bosch` tab via `<iframe>` — eliminates CSS/JS conflicts with main app. Old inline markup hidden in-place. | `35402a8` |
 | v1.9.8 | 2026-05-08 | **Bosch:** Replace HTML with user-provided version — per-page `callClaudeVision` with `systemPrompt` payload, `APP.agreementData` as keyed object, `generateBundle` loading from stored `arrayBuf`, `.step-nav` CSS class, `inv.id`-based approval assignments. | `18aab8a` |
