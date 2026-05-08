@@ -14,6 +14,7 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
+| v2.4.1 | 2026-05-08 | Exclude zero-scheduledHours agreements from summary table/PDF; revert deploy workflow to main-only trigger to stop Azure federated identity failures on PR pushes. | `ead95fa` |
 | v2.4.0 | 2026-05-08 | Fix scheduled hours for replaced agreements — treat Monday expiry as previous Sunday, exclude agreement entirely if adjusted expiry falls before period start. | `107a4f4` |
 | v2.3.9 | 2026-05-08 | Re-add feature branch deploy trigger to workflow (pending Azure federated credential setup for the feature branch). | `7669a31` |
 | v2.3.8 | 2026-05-08 | Revert deploy workflow to main-only trigger — feature branch trigger caused Azure federated identity error (subject mismatch). | `fb43bbf` |
