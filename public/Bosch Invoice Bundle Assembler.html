@@ -1655,6 +1655,7 @@ function buildSummaryRows() {
     // (replaced agreements whose expireTime = first day of period)
     const periodStart = APP.headerValues.billingPeriodStart || '';
     const agrDetails = [];
+    let locationOtRate = null;
     for (const [agrNum, ag] of Object.entries(agreements)) {
       const expireDate = ag.expireTime ? ag.expireTime.substring(0, 10) : null;
       if (expireDate && expireDate === periodStart) continue;
@@ -1662,6 +1663,7 @@ function buildSummaryRows() {
       types['Standard hours'].schedHrs += hrs;
       types['Standard hours'].agrNums.add('F' + agrNum);
       agrDetails.push(`F${agrNum}=${hrs}`);
+      if (!locationOtRate && ag.otRate) locationOtRate = parseFloat(ag.otRate);
     }
     console.log(`[schedHrs] ${locName}: ${agrDetails.join(' + ')} = ${types['Standard hours'].schedHrs}`);
  
@@ -1723,7 +1725,7 @@ function buildSummaryRows() {
     allRows.push({
       desc, invNum: '', agreementNum: '',
       type: 'Additional hours', schedHrs: 0,
-      qty: add.qty || 0, rate: add.rate || (std.rate ? std.rate * 1.5 : null),
+      qty: add.qty || 0, rate: locationOtRate || add.rate || (std.rate ? std.rate * 1.5 : null),
       subtotal: add.total, grandTotal: ''
     });
  

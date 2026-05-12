@@ -14,6 +14,7 @@ When starting a new session, prompt with: *"Read `docs/PROJECT_LOG.md`, `docs/RO
 
 | Version | Date | Highlights | SHA |
 |---|---|---|---|
+| v2.4.3 | 2026-05-08 | Additional hours rate now uses `otRate` from agreement data; falls back to OCR rate then std.rate × 1.5. | `cae2745` |
 | v2.4.2 | 2026-05-08 | Filter agreements expiring on period start date from summary — replaced agreements hidden; other zero-hour agreements still shown. | `aafe040` |
 | v2.4.1 | 2026-05-08 | Exclude zero-scheduledHours agreements from summary table/PDF; revert deploy workflow to main-only trigger to stop Azure federated identity failures on PR pushes. | `ead95fa` |
 | v2.4.0 | 2026-05-08 | Fix scheduled hours for replaced agreements — treat Monday expiry as previous Sunday, exclude agreement entirely if adjusted expiry falls before period start. | `107a4f4` |
