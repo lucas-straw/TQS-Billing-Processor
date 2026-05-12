@@ -1094,10 +1094,11 @@ async function startParsing() {
       logMsg(`\nFetching Bosch agreements (period: ${periodStart} to ${periodEnd}, ${calendarDays} calendar days = ${billingWeeks} weeks)...`, 'info');
       const agreements = await fetchAgreementData(periodStart, periodEnd);
       APP.agreementData = {};
-      agreements.forEach(ag => {
+      agreements.forEach((ag, i) => {
         const schedHrs = calculateScheduledHours(ag, periodStart, periodEnd, billingWeeks);
         APP.agreementData[ag.agreementNumber] = { ...ag, scheduledHours: schedHrs };
-        logMsg(`  F${ag.agreementNumber} @ ${ag.locationName}: contractHours=${ag.contractHours}/wk → scheduledHours=${schedHrs} (${billingWeeks} wks)`, 'info');
+        logMsg(`  F${ag.agreementNumber} @ ${ag.locationName}: contractHours=${ag.contractHours}/wk, otRate=${ag.otRate ?? '(none)'} → scheduledHours=${schedHrs} (${billingWeeks} wks)`, 'info');
+        if (i === 0) logMsg(`  [first agreement fields] ${Object.keys(ag).join(', ')}`, 'info');
       });
       logMsg(`Agreement data loaded: ${agreements.length} agreements, ${Object.keys(APP.agreementData).length} unique.`, 'success');
  
